@@ -1,0 +1,72 @@
+spring:
+  application:
+    name: banco-xyz-batch
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/banco_xyz
+    username: banco_xyz
+    password: banco_xyz
+    driver-class-name: org.postgresql.Driver
+
+  sql:
+    init:
+      mode: always
+      platform: postgresql
+      schema-locations: classpath:schema-postgresql.sql
+      continue-on-error: false
+
+  batch:
+    job:
+      # El Job a ejecutar se selecciona explicitamente con
+      # --spring.batch.job.name=<jobName>. Si no se especifica ninguno,
+      # Spring Boot ejecutaria todos los Job beans del contexto, por eso
+      # SIEMPRE se debe indicar el nombre al arrancar la aplicacion.
+      name:
+    jdbc:
+      initialize-schema: always
+
+logging:
+  level:
+    root: INFO
+    com.bancoxyz.batch: DEBUG
+    org.springframework.batch: INFO
+
+# ---------------------------------------------------------------------------
+# Rutas de los archivos CSV de origen (dataset legacy del Banco XYZ)
+# https://github.com/KariVillagran/bank_legacy_data - data/semana_3/*.csv
+# ---------------------------------------------------------------------------
+batch:
+  data:
+    transacciones-path: classpath:data/transacciones.csv
+    intereses-path: classpath:data/intereses.csv
+    cuentas-anuales-path: classpath:data/cuentas_anuales.csv
+
+  # Politica de tolerancia a fallos: cuantos items "skippeados" se toleran
+  # por partition/step antes de abortar el Job completo. El dataset legacy
+  # (semana_3) es intencionalmente muy "sucio" (categorias invalidas, saldos
+  # vacios, etc.), por lo que el limite se fija holgado para que el Job
+  # complete y a la vez siga protegiendo contra un problema masivo real
+  # (nunca puede saltar mas items de los que tiene la particion).
+  skip:
+    limit: 300
+
+  # Politica de reintento para errores transitorios de escritura en BD.
+  retry:
+    limit: 3
+    initial-interval-ms: 200
+    multiplier: 2.0
+    max-interval-ms: 2000
+
+  # Escalamiento via Partitioning: cuantas particiones (gridSize) se generan
+  # por archivo CSV y cuantos hilos del pool las procesan en paralelo.
+  partition:
+    grid-size: 4
+    pool-size: 4
+
+  # Tasas de interes mensual aplicadas por tipo de cuenta (Job Intereses).
+  intereses:
+    tasa-ahorro: 0.005
+    tasa-prestamo: 0.015
+    tasa-hipoteca: 0.010
+    edad-minima: 18
+    edad-maxima: 90
