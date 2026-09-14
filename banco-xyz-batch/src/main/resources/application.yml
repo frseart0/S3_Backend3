@@ -12,7 +12,9 @@ spring:
     init:
       mode: always
       platform: postgresql
-      schema-locations: classpath:schema-postgresql.sql
+      # El esquema de negocio vive en el modulo banco-xyz-domain porque lo
+      # comparten el batch (lo escribe) y el core-api (lo lee).
+      schema-locations: classpath:db/schema-negocio.sql
       continue-on-error: false
 
   batch:

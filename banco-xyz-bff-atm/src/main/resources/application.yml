@@ -1,0 +1,42 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: banco-xyz-bff-atm
+  jackson:
+    default-property-inclusion: non_null
+
+bff:
+  jwt:
+    canal: atm
+    emisor: banco-xyz-bff-atm
+    secreto: ${ATM_JWT_SECRET:secreto-canal-cajero-banco-xyz-2026-cambiar-en-produccion}
+    # Sesion de cajero: el cliente esta de pie frente a la maquina. Si la
+    # abandona, el token debe morir solo en minutos.
+    duracion-acceso: 3m
+
+  core-api:
+    base-url: ${CORE_API_URL:http://localhost:8080}
+    clave-interna: ${CORE_INTERNAL_KEY:clave-interna-banco-xyz-2026}
+    # Timeouts agresivos: nadie espera 8 segundos frente a un cajero.
+    timeout-conexion: 1s
+    timeout-lectura: 3s
+
+  atm:
+    # Denominacion de los billetes que carga la maquina: todo retiro debe ser
+    # multiplo de este valor.
+    denominacion: 1000
+    # Tope por operacion del canal, ademas del limite que aplica el nucleo.
+    monto-maximo: 100000
+    # Cuantos movimientos imprime el comprobante de "ultimos movimientos".
+    movimientos-comprobante: 3
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    root: INFO
+    com.bancoxyz.bff: DEBUG

@@ -1,8 +1,6 @@
-# Banco XYZ - Migración de Procesos Batch con Spring Batch
+# Banco XYZ - Batch + Backend for Frontend
 
-Proyecto de la asignatura **Desarrollo Backend III** (Semanas 1-3). Migra y moderniza 3 procesos batch legacy del "Banco XYZ" usando **Spring Batch**, leyendo los archivos CSV del dataset de referencia [KariVillagran/bank_legacy_data](https://github.com/KariVillagran/bank_legacy_data), validando/corrigiendo los datos y persistiéndolos en PostgreSQL.
-
-## Objetivo del proyecto
+## Objetivo del proyecto (semanas 1-3)
 
 Reescribir 3 procesos legacy del banco como Jobs de Spring Batch, cumpliendo con:
 
@@ -53,24 +51,33 @@ Los datos originales del CSV **no se descartan silenciosamente**: cada fila term
 
 ## Estructura del código
 
-```
-src/main/java/com/bancoxyz/batch/
-├── BatchApplication.java              Entry point (Spring Boot)
-├── config/                            @ConfigurationProperties (partition, skip, retry, tasas de interes)
-├── common/
-│   ├── exception/                     Excepciones de validacion de negocio
-│   ├── util/                          Parseo flexible de fechas/numeros
-│   ├── partition/                     LineRangePartitioner + factory del PartitionHandler
-│   ├── policy/                        BankSkipPolicy (tolerancia a fallos personalizada)
-│   └── listener/                      BankSkipListener (auditoria) y JobSummaryListener (resumen en consola)
-├── transacciones/                     Job 1: reader/processor/writer + Tasklet de resumen diario
-├── intereses/                         Job 2: reader/processor/writer (calculo de interes)
-└── cuentasanuales/                    Job 3: reader/processor/writer + Tasklet de estado de cuenta anual
+Monorepo Maven multi-modulo:
 
-src/main/resources/
-├── application.yml                    Datasource, tasas, parametros de partitioning/skip/retry
-├── schema-postgresql.sql              Tablas de negocio + batch_error_log
-└── data/                               transacciones.csv, intereses.csv, cuentas_anuales.csv (dataset semana_3)
+```
+banco-xyz-domain          Vocabulario compartido (Canal, EstadoRegistro, TipoCuenta) + db/schema-negocio.sql
+banco-xyz-batch           Jobs de las semanas 1-3 (sin cambios de logica)
+banco-xyz-core-api        :8080  API de dominio; unico acceso a PostgreSQL
+banco-xyz-bff-common      JWT por canal, CoreApiClient y manejo de errores
+banco-xyz-bff-web         :8081  respuestas completas y dashboard compuesto
+banco-xyz-bff-mobile      :8082  payload minimo, gzip y ETag
+banco-xyz-bff-atm         :8083  retiros, sesion corta y auditoria
+docs/                     Propuesta tecnica y coleccion HTTP
+```
+
+Batch (`banco-xyz-batch/src/main/java/com/bancoxyz/batch/`):
+
+```
+BatchApplication.java              Entry point (Spring Boot)
+config/                            @ConfigurationProperties (partition, skip, retry, tasas de interes)
+common/
+├── exception/                     Excepciones de validacion de negocio
+├── util/                          Parseo flexible de fechas/numeros
+├── partition/                     LineRangePartitioner + factory del PartitionHandler
+├── policy/                        BankSkipPolicy (tolerancia a fallos personalizada)
+└── listener/                      BankSkipListener (auditoria) y JobSummaryListener (resumen en consola)
+transacciones/                     Job 1: reader/processor/writer + Tasklet de resumen diario
+intereses/                         Job 2: reader/processor/writer (calculo de interes)
+cuentasanuales/                    Job 3: reader/processor/writer + Tasklet de estado de cuenta anual
 ```
 
 ## Reglas de validación y corrección por dataset
@@ -130,13 +137,13 @@ docker compose up -d
 
 ```powershell
 # Job 1: Reporte de Transacciones Diarias
-.\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--spring.batch.job.name=reporteTransaccionesDiariasJob"
+.\mvnw.cmd -pl banco-xyz-batch spring-boot:run "-Dspring-boot.run.arguments=--spring.batch.job.name=reporteTransaccionesDiariasJob"
 
 # Job 2: Calculo de Intereses Mensuales
-.\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--spring.batch.job.name=calculoInteresesMensualesJob"
+.\mvnw.cmd -pl banco-xyz-batch spring-boot:run "-Dspring-boot.run.arguments=--spring.batch.job.name=calculoInteresesMensualesJob"
 
 # Job 3: Generacion de Estados de Cuenta Anuales
-.\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--spring.batch.job.name=estadosCuentaAnualesJob"
+.\mvnw.cmd -pl banco-xyz-batch spring-boot:run "-Dspring-boot.run.arguments=--spring.batch.job.name=estadosCuentaAnualesJob"
 ```
 
 ### 4. Consultar los resultados
@@ -174,3 +181,72 @@ SELECT * FROM batch_error_log ORDER BY ocurrido_en DESC;
 | `batch.intereses.edad-minima` / `edad-maxima`                     | 18 / 90            | Rango de edad aceptado (fuera de rango se corrige)             |
 
 
+## Semanas 4-5: Backend for Frontend
+
+Tres BFF independientes consumen por HTTP el `core-api`. Ningun BFF habla con PostgreSQL: las reglas de integridad (saldo, retiros, idempotencia) viven en un solo lugar.
+
+```mermaid
+flowchart LR
+    navegador[Navegador] -->|"JWT aud=web"| bffWeb["bff-web :8081"]
+    movil[App Movil] -->|"JWT aud=mobile"| bffMobile["bff-mobile :8082"]
+    cajero[Cajero ATM] -->|"JWT aud=atm + X-Device-Id"| bffAtm["bff-atm :8083"]
+    bffWeb -->|"HTTP + X-Internal-Key"| core["core-api :8080"]
+    bffMobile -->|"HTTP + X-Internal-Key"| core
+    bffAtm -->|"HTTP + X-Internal-Key"| core
+    core --> db[("PostgreSQL banco_xyz")]
+    batch["banco-xyz-batch"] --> db
+```
+
+
+
+
+| Servicio               | Puerto | Contrato         | Autenticacion                              |
+| ---------------------- | ------ | ---------------- | ------------------------------------------ |
+| `banco-xyz-core-api`   | 8080   | `/internal/**`   | cabecera `X-Internal-Key`                  |
+| `banco-xyz-bff-web`    | 8081   | `/api/web/**`    | JWT `aud=web`, 30 min, `ROLE_WEB`          |
+| `banco-xyz-bff-mobile` | 8082   | `/api/mobile/**` | JWT `aud=mobile`, 15 min + refresh 30 dias |
+| `banco-xyz-bff-atm`    | 8083   | `/api/atm/**`    | tarjeta + PIN + `X-Device-Id`, JWT 3 min   |
+
+
+Un token de un canal es rechazado por los otros (validacion de audiencia). Swagger UI de cada servicio: `http://localhost:<puerto>/swagger-ui.html`.
+
+### Que expone cada BFF
+
+- **Web**: `POST /api/web/auth/login`, `GET /api/web/dashboard` (perfil + saldo + 20 movimientos + intereses + estado anual en una llamada), `GET /api/web/movimientos` paginado, `GET /api/web/reportes/`*. DTOs con metadatos de auditoria del batch (`estado`, `motivo`, `procesadoPorHilo`).
+- **Movil**: `POST /api/mobile/auth/login` y `/auth/refresh`, `GET /api/mobile/inicio`, `/saldo`, `/movimientos`. Payloads planos, montos redondeados, anomalias filtradas, gzip y `ETag` (304 si no cambio el saldo).
+- **Cajero**: `POST /api/atm/auth/sesion`, `GET /api/atm/saldo`, `POST /api/atm/retiros` (multiplo de 1000, tope 100000, `Idempotency-Key` obligatoria), `GET /api/atm/movimientos/ultimos`, `POST /api/atm/sesion/cerrar`. Sin datos personales en las respuestas.
+
+### Credenciales de demostracion
+
+Las siembra `SembradorDemo` al arrancar el core-api (password comun `Banco2026*`).
+
+
+| Usuario         | Cuenta | Canales          | Tarjeta            | PIN    |
+| --------------- | ------ | ---------------- | ------------------ | ------ |
+| `jane.smith`    | 106    | web, mobile, atm | `4051000000000106` | `1234` |
+| `charlie.green` | 109    | web, mobile      | —                  | —      |
+| `steve.rogers`  | 117    | web, atm         | `4051000000000117` | `4321` |
+
+
+Cajeros: `ATM-001` / `llave-atm-001` (Sucursal Centro) y `ATM-002` / `llave-atm-002` (Mall Plaza Norte).
+
+### Orden de arranque
+
+En terminales distintas, despues de `docker compose up -d` y de haber compilado:
+
+```powershell
+# 1. Poblar datos (una vez, los tres Jobs)
+.\mvnw.cmd -pl banco-xyz-batch spring-boot:run "-Dspring-boot.run.arguments=--spring.batch.job.name=reporteTransaccionesDiariasJob"
+.\mvnw.cmd -pl banco-xyz-batch spring-boot:run "-Dspring-boot.run.arguments=--spring.batch.job.name=calculoInteresesMensualesJob"
+.\mvnw.cmd -pl banco-xyz-batch spring-boot:run "-Dspring-boot.run.arguments=--spring.batch.job.name=estadosCuentaAnualesJob"
+
+# 2. Nucleo
+.\mvnw.cmd -pl banco-xyz-core-api spring-boot:run
+
+# 3. Canales (cada uno en su terminal)
+.\mvnw.cmd -pl banco-xyz-bff-web spring-boot:run
+.\mvnw.cmd -pl banco-xyz-bff-mobile spring-boot:run
+.\mvnw.cmd -pl banco-xyz-bff-atm spring-boot:run
+```
+
+Sin los Jobs, el core-api arranca igual y siembra las identidades, pero saldo y movimientos responden 404.

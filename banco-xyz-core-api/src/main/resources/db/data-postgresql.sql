@@ -1,0 +1,22 @@
+-- ===========================================================================
+-- Identidades de demostracion de los tres canales.
+-- ===========================================================================
+-- Las contrasenas, PIN y claves de cajero se hashean con BCrypt en runtime
+-- (SembradorDemo) para no versionar hashes reutilizables. Este script deja
+-- documentada la siembra y es el punto de enganche si mas adelante se
+-- pregeneran hashes fuera del repositorio.
+--
+-- Usuarios (password de todos: ver core.demo.password / README):
+--   jane.smith     cuenta 106   canales web,mobile,atm   tarjeta 4051000000000106
+--   charlie.green  cuenta 109   canales web,mobile
+--   steve.rogers   cuenta 117   canales web,atm          tarjeta 4051000000000117
+--
+-- Cajeros:
+--   ATM-001  Sucursal Centro
+--   ATM-002  Mall Plaza Norte
+--
+-- Los saldos vigentes se siembran en schema-api.sql a partir de
+-- cuentas_interes (resultado del Job de intereses).
+-- ===========================================================================
+
+SELECT 1;

@@ -1,0 +1,36 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: banco-xyz-bff-web
+
+bff:
+  jwt:
+    canal: web
+    emisor: banco-xyz-bff-web
+    secreto: ${WEB_JWT_SECRET:secreto-canal-web-banco-xyz-2026-cambiar-en-produccion}
+    # Sesion larga: el usuario trabaja en una pantalla amplia y espera seguir
+    # navegando sin reautenticarse.
+    duracion-acceso: 30m
+
+  core-api:
+    base-url: ${CORE_API_URL:http://localhost:8080}
+    clave-interna: ${CORE_INTERNAL_KEY:clave-interna-banco-xyz-2026}
+    timeout-conexion: 2s
+    timeout-lectura: 8s
+
+  web:
+    # Origen del SPA autorizado para consumir este BFF.
+    origenes-permitidos: ${WEB_CORS_ORIGINS:http://localhost:3000,http://localhost:5173}
+    # Cuantos movimientos trae el dashboard de una sola vez.
+    movimientos-dashboard: 20
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    root: INFO
+    com.bancoxyz.bff: DEBUG

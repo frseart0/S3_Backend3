@@ -1,0 +1,197 @@
+### Banco XYZ - coleccion de llamadas por canal
+### Requiere: PostgreSQL, Jobs batch, core-api :8080 y los tres BFF en marcha.
+### Variables de REST Client (VS Code / IntelliJ). Tras cada login, copiar el token.
+
+@core = http://localhost:8080
+@web = http://localhost:8081
+@mobile = http://localhost:8082
+@atm = http://localhost:8083
+@internalKey = clave-interna-banco-xyz-2026
+
+@webToken =
+@mobileToken =
+@mobileRefresh =
+@atmToken =
+
+############################################################
+# 0. Core-api (solo BFF; exige X-Internal-Key)
+############################################################
+
+### Sin clave interna: 401
+GET {{core}}/internal/cuentas/106/saldo
+
+### Con clave: saldo de Jane Smith
+GET {{core}}/internal/cuentas/106/saldo
+X-Internal-Key: {{internalKey}}
+X-Channel: web
+
+### Perfil
+GET {{core}}/internal/cuentas/106/perfil
+X-Internal-Key: {{internalKey}}
+X-Channel: web
+
+############################################################
+# 1. BFF Web :8081  (payload completo, sesion 30 min)
+############################################################
+
+### Login web
+# @name loginWeb
+POST {{web}}/api/web/auth/login
+Content-Type: application/json
+
+{
+  "usuario": "jane.smith",
+  "password": "Banco2026*"
+}
+
+### Dashboard compuesto (perfil + saldo + movimientos + intereses + estado anual)
+GET {{web}}/api/web/dashboard
+Authorization: Bearer {{loginWeb.response.body.token}}
+
+### Movimientos paginados
+GET {{web}}/api/web/movimientos?pagina=0&tamano=5
+Authorization: Bearer {{loginWeb.response.body.token}}
+
+### Reportes del Job 1
+GET {{web}}/api/web/reportes/transacciones-diarias?limite=10
+Authorization: Bearer {{loginWeb.response.body.token}}
+
+### Resumen diario
+GET {{web}}/api/web/reportes/resumen-diario
+Authorization: Bearer {{loginWeb.response.body.token}}
+
+### Swagger UI web
+GET {{web}}/swagger-ui.html
+
+############################################################
+# 2. BFF Movil :8082  (payload reducido, refresh, ETag)
+############################################################
+
+### Login movil (access + refresh)
+# @name loginMobile
+POST {{mobile}}/api/mobile/auth/login
+Content-Type: application/json
+
+{
+  "usuario": "jane.smith",
+  "password": "Banco2026*"
+}
+
+### Inicio: saldo + 5 movimientos
+GET {{mobile}}/api/mobile/inicio
+Authorization: Bearer {{loginMobile.response.body.token}}
+
+### Saldo (anotar el ETag de la respuesta)
+# @name saldoMobile
+GET {{mobile}}/api/mobile/saldo
+Authorization: Bearer {{loginMobile.response.body.token}}
+
+### Segunda consulta identica: debe devolver 304 si se reenvia el ETag
+GET {{mobile}}/api/mobile/saldo
+Authorization: Bearer {{loginMobile.response.body.token}}
+If-None-Match: {{saldoMobile.response.headers.ETag}}
+
+### Movimientos ligeros (sin estado/motivo/hilo)
+GET {{mobile}}/api/mobile/movimientos?limite=5
+Authorization: Bearer {{loginMobile.response.body.token}}
+
+### Refresco de access token
+POST {{mobile}}/api/mobile/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{loginMobile.response.body.refreshToken}}"
+}
+
+############################################################
+# 3. BFF Cajero :8083  (PIN + dispositivo, sesion 3 min)
+############################################################
+
+### Apertura de sesion
+# @name loginAtm
+POST {{atm}}/api/atm/auth/sesion
+X-Device-Id: ATM-001
+X-Device-Key: llave-atm-001
+Content-Type: application/json
+
+{
+  "tarjeta": "4051000000000106",
+  "pin": "1234"
+}
+
+### Saldo (sin datos personales)
+GET {{atm}}/api/atm/saldo
+Authorization: Bearer {{loginAtm.response.body.token}}
+X-Device-Id: ATM-001
+
+### Ultimos movimientos del comprobante
+GET {{atm}}/api/atm/movimientos/ultimos
+Authorization: Bearer {{loginAtm.response.body.token}}
+X-Device-Id: ATM-001
+
+### Retiro (multiplo de 1000, tope 100000, Idempotency-Key obligatoria)
+POST {{atm}}/api/atm/retiros
+Authorization: Bearer {{loginAtm.response.body.token}}
+X-Device-Id: ATM-001
+Idempotency-Key: retiro-demo-001
+Content-Type: application/json
+
+{
+  "monto": 10000
+}
+
+### Reintento del mismo retiro: comprobante original con reintento=true
+POST {{atm}}/api/atm/retiros
+Authorization: Bearer {{loginAtm.response.body.token}}
+X-Device-Id: ATM-001
+Idempotency-Key: retiro-demo-001
+Content-Type: application/json
+
+{
+  "monto": 10000
+}
+
+### Cerrar sesion (el token deja de servir)
+POST {{atm}}/api/atm/sesion/cerrar
+Authorization: Bearer {{loginAtm.response.body.token}}
+X-Device-Id: ATM-001
+
+############################################################
+# 4. Aislamiento entre canales (deben devolver 401)
+############################################################
+
+### Token web en el BFF movil
+GET {{mobile}}/api/mobile/saldo
+Authorization: Bearer {{loginWeb.response.body.token}}
+
+### Token movil en el BFF web
+GET {{web}}/api/web/dashboard
+Authorization: Bearer {{loginMobile.response.body.token}}
+
+### Token web en el BFF cajero
+GET {{atm}}/api/atm/saldo
+Authorization: Bearer {{loginWeb.response.body.token}}
+X-Device-Id: ATM-001
+
+### charlie.green no tiene canal atm: el nucleo rechaza el PIN
+POST {{atm}}/api/atm/auth/sesion
+X-Device-Id: ATM-001
+X-Device-Key: llave-atm-001
+Content-Type: application/json
+
+{
+  "tarjeta": "4051000000000109",
+  "pin": "1234"
+}
+
+############################################################
+# 5. Comparacion de payload web vs movil (misma cuenta, 5 items)
+############################################################
+
+### Web: 9 campos por movimiento, incluye auditoria
+GET {{web}}/api/web/movimientos?pagina=0&tamano=5
+Authorization: Bearer {{loginWeb.response.body.token}}
+
+### Movil: 4 campos, sin anomalias ni metadatos de batch
+GET {{mobile}}/api/mobile/movimientos?limite=5
+Authorization: Bearer {{loginMobile.response.body.token}}

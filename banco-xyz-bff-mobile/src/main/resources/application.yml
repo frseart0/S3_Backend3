@@ -1,0 +1,48 @@
+server:
+  port: 8082
+  compression:
+    # El payload movil ya es pequeno, pero gzip sobre JSON repetitivo (listas
+    # de movimientos) sigue ahorrando ancho de banda.
+    enabled: true
+    mime-types: application/json
+    min-response-size: 512
+
+spring:
+  application:
+    name: banco-xyz-bff-mobile
+  jackson:
+    # Ningun campo nulo viaja a un telefono.
+    default-property-inclusion: non_null
+
+bff:
+  jwt:
+    canal: mobile
+    emisor: banco-xyz-bff-mobile
+    secreto: ${MOBILE_JWT_SECRET:secreto-canal-movil-banco-xyz-2026-cambiar-en-produccion}
+    # Access token corto porque la app puede renovarlo sola con el refresh
+    # token, sin volver a pedirle la clave al usuario.
+    duracion-acceso: 15m
+    duracion-refresco: 30d
+
+  core-api:
+    base-url: ${CORE_API_URL:http://localhost:8080}
+    clave-interna: ${CORE_INTERNAL_KEY:clave-interna-banco-xyz-2026}
+    timeout-conexion: 2s
+    timeout-lectura: 5s
+
+  mobile:
+    # Cuantos movimientos acompanan a la pantalla de inicio.
+    movimientos-inicio: 5
+    # Tope duro: la app nunca necesita mas de una pantalla de historial.
+    movimientos-maximo: 25
+    # Largo maximo de la descripcion de un movimiento.
+    largo-detalle: 40
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    root: INFO
+    com.bancoxyz.bff: DEBUG

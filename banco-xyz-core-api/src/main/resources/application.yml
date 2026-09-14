@@ -1,0 +1,60 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: banco-xyz-core-api
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/banco_xyz
+    username: banco_xyz
+    password: banco_xyz
+    driver-class-name: org.postgresql.Driver
+
+  sql:
+    init:
+      mode: always
+      platform: postgresql
+      # El esquema de negocio (modulo banco-xyz-domain) se aplica primero para
+      # garantizar que las tablas que escribe el batch existan antes de que
+      # schema-api.sql siembre los saldos a partir de ellas.
+      schema-locations:
+        - classpath:db/schema-negocio.sql
+        - classpath:db/schema-api.sql
+      data-locations:
+        - classpath:db/data-postgresql.sql
+      continue-on-error: false
+
+  jackson:
+    default-property-inclusion: non_null
+
+core:
+  seguridad:
+    # Los BFF son los unicos clientes del core-api y se identifican con esta
+    # clave en la cabecera X-Internal-Key.
+    clave-interna: ${CORE_INTERNAL_KEY:clave-interna-banco-xyz-2026}
+    # Intentos fallidos (contrasena o PIN) antes de bloquear la identidad.
+    max-intentos-fallidos: 3
+
+  retiro:
+    # Reglas de integridad del nucleo, iguales para todos los canales. Las
+    # reglas propias del cajero (denominacion de billetes) viven en su BFF.
+    monto-minimo: 1000
+    monto-maximo-operacion: 200000
+    limite-diario: 400000
+
+  demo:
+    # Siembra idempotente de identidades de prueba sobre cuentas que existen en
+    # el dataset legacy. En un entorno real esto lo haria el sistema de
+    # onboarding de clientes.
+    sembrar: true
+    password: Banco2026*
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    root: INFO
+    com.bancoxyz.core: DEBUG
