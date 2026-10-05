@@ -8,6 +8,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 
@@ -30,9 +32,7 @@ public class RespuestasSeguridadJson implements AuthenticationEntryPoint, Access
     public void commence(HttpServletRequest request,
                          HttpServletResponse response,
                          AuthenticationException excepcion) throws IOException {
-        Object motivo = request.getAttribute(JwtAuthenticationFilter.ATRIBUTO_MOTIVO);
-        escribir(response, HttpStatus.UNAUTHORIZED, "NO_AUTENTICADO",
-                motivo != null ? motivo.toString() : "Se requiere un token valido para este canal");
+        escribir(response, HttpStatus.UNAUTHORIZED, "NO_AUTENTICADO", mensaje(request, excepcion));
     }
 
     @Override
@@ -41,6 +41,20 @@ public class RespuestasSeguridadJson implements AuthenticationEntryPoint, Access
                        AccessDeniedException excepcion) throws IOException {
         escribir(response, HttpStatus.FORBIDDEN, "SIN_PERMISO",
                 "El token no autoriza esta operacion en este canal");
+    }
+
+    private static String mensaje(HttpServletRequest request, AuthenticationException excepcion) {
+        Object motivo = request.getAttribute(JwtAuthenticationFilter.ATRIBUTO_MOTIVO);
+        if (motivo != null) {
+            return motivo.toString();
+        }
+        if (excepcion instanceof OAuth2AuthenticationException oauth) {
+            OAuth2Error error = oauth.getError();
+            if (error != null && error.getDescription() != null && !error.getDescription().isBlank()) {
+                return error.getDescription();
+            }
+        }
+        return "Se requiere un token valido para este canal";
     }
 
     private void escribir(HttpServletResponse response, HttpStatus estado, String codigo, String mensaje)

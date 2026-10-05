@@ -4,14 +4,31 @@ server:
 spring:
   application:
     name: banco-xyz-bff-atm
+  config:
+    import: optional:configserver:${CONFIG_SERVER:http://localhost:8888}
+  cloud:
+    config:
+      request-connect-timeout: 500
+      request-read-timeout: 500
   jackson:
     default-property-inclusion: non_null
 
+eureka:
+  client:
+    enabled: false
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
 bff:
+  oauth2:
+    modo: local
+    issuer: http://banco-xyz-auth
+    auth-server-url: ${AUTH_SERVER_URL:http://localhost:9000}
+    client-secret: ${OAUTH_CLIENT_SECRET:banco-xyz-oauth-2026}
   jwt:
     canal: atm
-    emisor: banco-xyz-bff-atm
-    secreto: ${ATM_JWT_SECRET:secreto-canal-cajero-banco-xyz-2026-cambiar-en-produccion}
+    emisor: http://banco-xyz-auth
+    secreto: ${OAUTH_HMAC_SECRET:secreto-oauth-banco-xyz-compartido-2026-cambiar}
     # Sesion de cajero: el cliente esta de pie frente a la maquina. Si la
     # abandona, el token debe morir solo en minutos.
     duracion-acceso: 3m
@@ -35,6 +52,33 @@ bff:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+resilience4j:
+  circuitbreaker:
+    circuitBreakerAspectOrder: 1
+    instances:
+      coreAtm:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 2
+        ignoreExceptions:
+          - com.bancoxyz.bff.common.core.CoreApiException
+  retry:
+    retryAspectOrder: 2
+    instances:
+      coreAtm:
+        maxAttempts: 2
+        waitDuration: 100ms
+        retryExceptions:
+          - org.springframework.web.client.ResourceAccessException
+  timelimiter:
+    timeLimiterAspectOrder: 3
+    instances:
+      coreAtm:
+        timeoutDuration: 3s
+        cancelRunningFuture: true
 
 logging:
   level:

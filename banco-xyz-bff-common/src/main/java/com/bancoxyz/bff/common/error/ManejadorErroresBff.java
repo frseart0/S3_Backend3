@@ -69,6 +69,13 @@ public class ManejadorErroresBff {
                 .body(ErrorRespuesta.de("SOLICITUD_INVALIDA", ex.getMessage()));
     }
 
+    @ExceptionHandler(CanalNoDisponibleException.class)
+    public ResponseEntity<ErrorRespuesta> canalNoDisponible(CanalNoDisponibleException ex) {
+        log.warn("Canal degradado: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorRespuesta.de("CAJERO_NO_DISPONIBLE", ex.getMessage()));
+    }
+
     @ExceptionHandler(CoreApiException.class)
     public ResponseEntity<ErrorRespuesta> core(CoreApiException ex) {
         if (ex.estado().is4xxClientError()) {

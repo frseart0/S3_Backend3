@@ -250,3 +250,51 @@ En terminales distintas, despues de `docker compose up -d` y de haber compilado:
 ```
 
 Sin los Jobs, el core-api arranca igual y siembra las identidades, pero saldo y movimientos responden 404.
+
+## Semanas 6-8: Spring Cloud, eventos y OAuth2
+
+Los BFF y el core-api siguen siendo los de las semanas 4-5. Alrededor se agregan el config server, Eureka, Resilience4j en el cajero, Kafka para los retiros y un authorization server OAuth2. El diagrama de topicos esta en [docs/arquitectura-eventos.md](docs/arquitectura-eventos.md).
+
+| Servicio | Puerto | Rol |
+| --- | --- | --- |
+| `banco-xyz-config-server` | 8888 | Configuracion central, perfil native, carpeta `config-repo/` |
+| `banco-xyz-discovery` | 8761 | Eureka. Registra core-api, los tres BFF, auth y notificaciones |
+| `banco-xyz-auth-server` | 9000 | OAuth2. Grant `canal_password` y refresh del canal movil |
+| `banco-xyz-core-api` | 8080 | API de la migracion. Publica `banco.retiros.realizados` |
+| `banco-xyz-bff-web` | 8081 | Resource server, scope `web` |
+| `banco-xyz-bff-mobile` | 8082 | Resource server, scope `mobile` |
+| `banco-xyz-bff-atm` | 8083 | Resource server con circuit breaker, retry y time limiter |
+| `banco-xyz-notificaciones` | 8084 | Consume el topico de retiros |
+| Kafka | 9092 | Broker KRaft, sin ZooKeeper |
+
+Sin el config server los servicios siguen levantando con su `application.yml` local (`spring.config.import` es opcional) y firman el JWT ellos mismos (`bff.oauth2.modo=local`). En Docker el config-repo pasa el modo a `authorization-server`: el login le pide el token al auth server y los BFF solo lo validan.
+
+### Patron de eventos
+
+Notificacion de eventos con outbox transaccional. El retiro descuenta el saldo y deja la fila en `outbox_evento` en la misma transaccion. Un publicador la manda a `banco.retiros.realizados`. `banco-xyz-notificaciones` guarda el comprobante. Si el consumo falla, el mensaje termina en `banco.retiros.dlq`.
+
+### OAuth2
+
+Clientes confidenciales `web-client`, `mobile-client` y `atm-client` (secreto `banco-xyz-oauth-2026`). Un token con audiencia `web` no entra al cajero. El core no se abre a internet: sigue exigiendo `X-Internal-Key`.
+
+Ejemplo contra el authorization server:
+
+```http
+POST http://localhost:9000/oauth2/token
+Authorization: Basic d2ViLWNsaWVudDpiYW5jby14eXotb2F1dGgtMjAyNg==
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=canal_password&canal=web&username=jane.smith&password=Banco2026*&scope=web
+```
+
+El login de cada canal (`POST /api/web/auth/login`, `/api/mobile/auth/login`, `/api/atm/auth/sesion`) sigue devolviendo el mismo JSON. En modo remoto reenvia las credenciales al grant y devuelve el access token del issuer `http://banco-xyz-auth`.
+
+### Docker
+
+Los Jobs batch no van en el compose: hay que ejecutarlos una vez para que existan saldo y movimientos. Despues:
+
+```powershell
+docker compose up -d --build
+```
+
+Orden interno: Postgres y Kafka, config server y Eureka, core-api, auth server, BFF y notificaciones. Eureka queda en `http://localhost:8761`. El cajero, si el nucleo no responde, contesta 503 `CAJERO_NO_DISPONIBLE` en lugar de caerse.

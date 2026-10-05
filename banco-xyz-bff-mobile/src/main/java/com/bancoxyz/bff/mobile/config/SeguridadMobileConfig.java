@@ -2,7 +2,8 @@ package com.bancoxyz.bff.mobile.config;
 
 import com.bancoxyz.bff.common.error.RespuestasSeguridadJson;
 import com.bancoxyz.bff.common.seguridad.CadenaSeguridadBff;
-import com.bancoxyz.bff.common.seguridad.JwtService;
+import com.bancoxyz.bff.common.seguridad.ConversorJwtCanal;
+import com.bancoxyz.bff.common.seguridad.JwtProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -18,9 +19,10 @@ public class SeguridadMobileConfig {
 
     @Bean
     public SecurityFilterChain cadenaMovil(HttpSecurity http,
-                                           JwtService jwtService,
+                                           JwtProperties jwt,
+                                           ConversorJwtCanal conversor,
                                            RespuestasSeguridadJson respuestas) throws Exception {
-        return CadenaSeguridadBff.base(http, jwtService, respuestas,
+        return CadenaSeguridadBff.base(http, jwt, conversor, respuestas,
                         "/api/mobile/auth/login",
                         "/api/mobile/auth/refresh",
                         "/actuator/health",

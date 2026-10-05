@@ -10,15 +10,32 @@ server:
 spring:
   application:
     name: banco-xyz-bff-mobile
+  config:
+    import: optional:configserver:${CONFIG_SERVER:http://localhost:8888}
+  cloud:
+    config:
+      request-connect-timeout: 500
+      request-read-timeout: 500
   jackson:
     # Ningun campo nulo viaja a un telefono.
     default-property-inclusion: non_null
 
+eureka:
+  client:
+    enabled: false
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
 bff:
+  oauth2:
+    modo: local
+    issuer: http://banco-xyz-auth
+    auth-server-url: ${AUTH_SERVER_URL:http://localhost:9000}
+    client-secret: ${OAUTH_CLIENT_SECRET:banco-xyz-oauth-2026}
   jwt:
     canal: mobile
-    emisor: banco-xyz-bff-mobile
-    secreto: ${MOBILE_JWT_SECRET:secreto-canal-movil-banco-xyz-2026-cambiar-en-produccion}
+    emisor: http://banco-xyz-auth
+    secreto: ${OAUTH_HMAC_SECRET:secreto-oauth-banco-xyz-compartido-2026-cambiar}
     # Access token corto porque la app puede renovarlo sola con el refresh
     # token, sin volver a pedirle la clave al usuario.
     duracion-acceso: 15m

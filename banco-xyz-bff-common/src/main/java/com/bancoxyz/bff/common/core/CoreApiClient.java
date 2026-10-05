@@ -15,10 +15,14 @@ import com.bancoxyz.domain.contract.SolicitudRetiro;
 import com.bancoxyz.domain.contract.TransaccionDiaria;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+
+import java.net.URI;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -41,7 +45,10 @@ public class CoreApiClient {
     private final ObjectMapper objectMapper;
     private final Canal canal;
 
-    public CoreApiClient(CoreApiProperties propiedades, Canal canal, ObjectMapper objectMapper) {
+    public CoreApiClient(CoreApiProperties propiedades,
+                         Canal canal,
+                         ObjectMapper objectMapper,
+                         ObjectProvider<DiscoveryClient> descubrimientos) {
         this.canal = canal;
         this.objectMapper = objectMapper;
 
@@ -49,15 +56,31 @@ public class CoreApiClient {
         factory.setConnectTimeout((int) propiedades.timeoutConexion().toMillis());
         factory.setReadTimeout((int) propiedades.timeoutLectura().toMillis());
 
-        this.restClient = RestClient.builder()
+        var builder = RestClient.builder()
                 .baseUrl(propiedades.baseUrl())
                 .requestFactory(factory)
                 .defaultHeader(CABECERA_CLAVE_INTERNA, propiedades.claveInterna())
                 .defaultHeader(CABECERA_CANAL, canal.codigo())
                 .defaultStatusHandler(HttpStatusCode::isError, (peticion, respuesta) -> {
                     throw traducirError(respuesta.getStatusCode(), respuesta.getBody());
-                })
-                .build();
+                });
+        if (hayQueDescubrir(propiedades.baseUrl())) {
+            DiscoveryClient discovery = descubrimientos.getIfAvailable();
+            if (discovery == null) {
+                throw new IllegalStateException(
+                        "bff.core-api.base-url apunta a un servicio de Eureka pero el discovery no esta habilitado");
+            }
+            builder.requestInterceptor(new InterceptorDescubrimiento(discovery));
+        }
+        this.restClient = builder.build();
+    }
+
+    private static boolean hayQueDescubrir(String baseUrl) {
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return false;
+        }
+        String host = URI.create(baseUrl).getHost();
+        return host != null && !InterceptorDescubrimiento.esDirecto(host);
     }
 
     // ----------------------------------------------------------------- auth

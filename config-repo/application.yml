@@ -1,0 +1,29 @@
+# Configuracion compartida por todos los clientes del config server.
+# No fija puertos: cada servicio conserva el suyo.
+
+eureka:
+  client:
+    enabled: true
+    service-url:
+      defaultZone: http://discovery:8761/eureka/
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+
+spring:
+  kafka:
+    bootstrap-servers: kafka:9092
+
+bff:
+  jwt:
+    emisor: http://banco-xyz-auth
+    secreto: ${OAUTH_HMAC_SECRET:secreto-oauth-banco-xyz-compartido-2026-cambiar}
+  oauth2:
+    modo: authorization-server
+    issuer: http://banco-xyz-auth
+    auth-server-url: http://auth-server:9000
+    client-secret: ${OAUTH_CLIENT_SECRET:banco-xyz-oauth-2026}
+  core-api:
+    base-url: http://banco-xyz-core-api
+    clave-interna: ${CORE_INTERNAL_KEY:clave-interna-banco-xyz-2026}

@@ -15,7 +15,7 @@
     <artifactId>banco-xyz-parent</artifactId>
     <version>1.0.0</version>
     <name>banco-xyz-parent</name>
-    <description>Banco XYZ: migracion batch (semanas 1-3) + patron Backend for Frontend (semanas 4-5)</description>
+    <description>Banco XYZ: batch, BFF y microservicios Spring Cloud (config, discovery, resiliencia, eventos y OAuth2)</description>
     <packaging>pom</packaging>
 
     <modules>
@@ -26,17 +26,37 @@
         <module>banco-xyz-bff-web</module>
         <module>banco-xyz-bff-mobile</module>
         <module>banco-xyz-bff-atm</module>
+        <module>banco-xyz-config-server</module>
+        <module>banco-xyz-discovery</module>
+        <module>banco-xyz-auth-server</module>
+        <module>banco-xyz-notificaciones</module>
     </modules>
 
     <properties>
         <java.version>21</java.version>
         <lombok.version>1.18.42</lombok.version>
         <springdoc.version>2.8.9</springdoc.version>
-        <jjwt.version>0.12.6</jjwt.version>
+        <spring-cloud.version>2025.0.0</spring-cloud.version>
+        <resilience4j.version>2.3.0</resilience4j.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-bom</artifactId>
+                <version>${resilience4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <dependency>
                 <groupId>com.bancoxyz</groupId>
                 <artifactId>banco-xyz-domain</artifactId>
@@ -55,19 +75,39 @@
             </dependency>
 
             <dependency>
-                <groupId>io.jsonwebtoken</groupId>
-                <artifactId>jjwt-api</artifactId>
-                <version>${jjwt.version}</version>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-spring-boot3</artifactId>
+                <version>${resilience4j.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.jsonwebtoken</groupId>
-                <artifactId>jjwt-impl</artifactId>
-                <version>${jjwt.version}</version>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-spring6</artifactId>
+                <version>${resilience4j.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.jsonwebtoken</groupId>
-                <artifactId>jjwt-jackson</artifactId>
-                <version>${jjwt.version}</version>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-annotations</artifactId>
+                <version>${resilience4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-circuitbreaker</artifactId>
+                <version>${resilience4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-retry</artifactId>
+                <version>${resilience4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-timelimiter</artifactId>
+                <version>${resilience4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-core</artifactId>
+                <version>${resilience4j.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

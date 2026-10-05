@@ -1,0 +1,8 @@
+bff:
+  jwt:
+    canal: mobile
+    duracion-acceso: 15m
+    duracion-refresco: 30d
+  core-api:
+    timeout-conexion: 2s
+    timeout-lectura: 5s

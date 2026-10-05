@@ -2,7 +2,8 @@ package com.bancoxyz.bff.web.config;
 
 import com.bancoxyz.bff.common.error.RespuestasSeguridadJson;
 import com.bancoxyz.bff.common.seguridad.CadenaSeguridadBff;
-import com.bancoxyz.bff.common.seguridad.JwtService;
+import com.bancoxyz.bff.common.seguridad.ConversorJwtCanal;
+import com.bancoxyz.bff.common.seguridad.JwtProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -23,10 +24,11 @@ public class SeguridadWebConfig {
 
     @Bean
     public SecurityFilterChain cadenaWeb(HttpSecurity http,
-                                         JwtService jwtService,
+                                         JwtProperties jwt,
+                                         ConversorJwtCanal conversor,
                                          RespuestasSeguridadJson respuestas,
                                          CorsConfigurationSource corsSource) throws Exception {
-        return CadenaSeguridadBff.base(http, jwtService, respuestas,
+        return CadenaSeguridadBff.base(http, jwt, conversor, respuestas,
                         "/api/web/auth/login",
                         "/actuator/health",
                         "/swagger-ui.html",

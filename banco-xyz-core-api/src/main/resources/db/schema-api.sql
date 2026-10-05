@@ -73,6 +73,24 @@ CREATE INDEX IF NOT EXISTS idx_operaciones_cuenta_fecha
     ON operaciones_cuenta (cuenta_id, realizado_en);
 
 -- ---------------------------------------------------------------------------
+-- Outbox transaccional. El retiro y el evento se confirman juntos; un
+-- publicador posterior los entrega a Kafka. Si el broker esta caido, la fila
+-- queda pendiente y se reintenta sin volver a cobrar.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS outbox_evento (
+    id              BIGSERIAL PRIMARY KEY,
+    tipo            VARCHAR(80) NOT NULL,
+    clave_evento    VARCHAR(80) NOT NULL UNIQUE,
+    payload         TEXT NOT NULL,
+    publicado       BOOLEAN NOT NULL DEFAULT FALSE,
+    creado_en       TIMESTAMP NOT NULL DEFAULT now(),
+    publicado_en    TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_outbox_evento_pendiente
+    ON outbox_evento (publicado, id);
+
+-- ---------------------------------------------------------------------------
 -- Siembra del saldo vigente con el resultado del Job de intereses. El dataset
 -- legacy trae varias filas por cuenta, por lo que se toma la ultima fila
 -- confiable de cada una (DISTINCT ON) como saldo de partida. Si el Job todavia

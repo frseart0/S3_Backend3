@@ -1,0 +1,7 @@
+bff:
+  jwt:
+    canal: web
+    duracion-acceso: 30m
+  core-api:
+    timeout-conexion: 2s
+    timeout-lectura: 8s

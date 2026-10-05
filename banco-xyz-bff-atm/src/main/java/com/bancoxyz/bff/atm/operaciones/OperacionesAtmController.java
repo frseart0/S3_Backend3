@@ -4,7 +4,7 @@ import com.bancoxyz.bff.atm.config.AtmProperties;
 import com.bancoxyz.bff.atm.dto.ComprobanteAtm;
 import com.bancoxyz.bff.atm.dto.MovimientoAtm;
 import com.bancoxyz.bff.atm.dto.SaldoAtm;
-import com.bancoxyz.bff.common.core.CoreApiClient;
+import com.bancoxyz.bff.atm.resiliencia.NucleoAtm;
 import com.bancoxyz.bff.common.error.OperacionInvalidaException;
 import com.bancoxyz.bff.common.seguridad.UsuarioCanal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,14 +30,14 @@ import java.util.List;
 @Tag(name = "Operaciones de cajero")
 public class OperacionesAtmController {
 
-    private final CoreApiClient core;
+    private final NucleoAtm nucleo;
     private final RetiroAtmService retiros;
     private final AtmProperties propiedades;
 
-    public OperacionesAtmController(CoreApiClient core,
+    public OperacionesAtmController(NucleoAtm nucleo,
                                     RetiroAtmService retiros,
                                     AtmProperties propiedades) {
-        this.core = core;
+        this.nucleo = nucleo;
         this.retiros = retiros;
         this.propiedades = propiedades;
     }
@@ -47,7 +47,7 @@ public class OperacionesAtmController {
     public SaldoAtm saldo(@AuthenticationPrincipal UsuarioCanal usuario,
                           @RequestHeader("X-Device-Id") String dispositivoId) {
         exigirMismoDispositivo(usuario, dispositivoId);
-        return SaldoAtm.desde(core.saldo(usuario.cuentaId()));
+        return SaldoAtm.desde(nucleo.saldo(usuario.cuentaId()));
     }
 
     /**
@@ -75,7 +75,7 @@ public class OperacionesAtmController {
     public List<MovimientoAtm> ultimosMovimientos(@AuthenticationPrincipal UsuarioCanal usuario,
                                                   @RequestHeader("X-Device-Id") String dispositivoId) {
         exigirMismoDispositivo(usuario, dispositivoId);
-        var pagina = core.movimientos(usuario.cuentaId(), null, null, 0,
+        var pagina = nucleo.movimientos(usuario.cuentaId(), null, null, 0,
                 propiedades.movimientosComprobante());
         return pagina.contenido().stream().map(MovimientoAtm::desde).toList();
     }

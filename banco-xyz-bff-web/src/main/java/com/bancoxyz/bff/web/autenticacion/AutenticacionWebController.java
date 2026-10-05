@@ -1,7 +1,11 @@
 package com.bancoxyz.bff.web.autenticacion;
 
 import com.bancoxyz.bff.common.core.CoreApiClient;
+import com.bancoxyz.bff.common.oauth.OAuthClienteProperties;
+import com.bancoxyz.bff.common.oauth.ResultadoToken;
+import com.bancoxyz.bff.common.oauth.SolicitanteToken;
 import com.bancoxyz.bff.common.seguridad.JwtService;
+import com.bancoxyz.bff.common.seguridad.TipoToken;
 import com.bancoxyz.bff.common.seguridad.UsuarioCanal;
 import com.bancoxyz.bff.common.seguridad.VerificacionIdentidad;
 import com.bancoxyz.bff.web.dto.SesionWeb;
@@ -31,22 +35,39 @@ public class AutenticacionWebController {
 
     private final CoreApiClient core;
     private final JwtService jwt;
+    private final OAuthClienteProperties oauth;
+    private final SolicitanteToken solicitante;
 
-    public AutenticacionWebController(CoreApiClient core, JwtService jwt) {
+    public AutenticacionWebController(CoreApiClient core,
+                                      JwtService jwt,
+                                      OAuthClienteProperties oauth,
+                                      SolicitanteToken solicitante) {
         this.core = core;
         this.jwt = jwt;
+        this.oauth = oauth;
+        this.solicitante = solicitante;
     }
 
     @PostMapping("/login")
     @Operation(summary = "Emite un token con audiencia 'web' para la banca en linea")
     public SesionWeb login(@Valid @RequestBody CredencialesWeb credenciales) {
+        if (oauth.remoto()) {
+            ResultadoToken token = solicitante.canalPassword(
+                    Canal.WEB, credenciales.usuario(), credenciales.password());
+            UsuarioCanal usuario = jwt.validar(token.accessToken(), TipoToken.ACCESO);
+            return sesion(usuario, token.accessToken(), token.expiraEnSegundos(jwt.duracionAcceso()));
+        }
         var resultado = core.validarCredenciales(credenciales.usuario(), credenciales.password());
         UsuarioCanal usuario = VerificacionIdentidad.exigirAutenticado(resultado, Canal.WEB);
 
+        return sesion(usuario, jwt.emitirAcceso(usuario), jwt.duracionAcceso().toSeconds());
+    }
+
+    private SesionWeb sesion(UsuarioCanal usuario, String token, long expiraEnSegundos) {
         return new SesionWeb(
-                jwt.emitirAcceso(usuario),
+                token,
                 "Bearer",
-                jwt.duracionAcceso().toSeconds(),
+                expiraEnSegundos,
                 usuario.usuario(),
                 usuario.nombre(),
                 usuario.cuentaId(),

@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/banco_xyz
+    username: banco_xyz
+    password: banco_xyz
+  kafka:
+    consumer:
+      group-id: banco-xyz-notificaciones
+      auto-offset-reset: earliest
+
+notificaciones:
+  topico: banco.retiros.realizados
+  topico-dlq: banco.retiros.dlq

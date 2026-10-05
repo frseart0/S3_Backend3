@@ -4,12 +4,18 @@ import com.bancoxyz.bff.common.core.CoreApiClient;
 import com.bancoxyz.bff.common.core.CoreApiProperties;
 import com.bancoxyz.bff.common.error.ManejadorErroresBff;
 import com.bancoxyz.bff.common.error.RespuestasSeguridadJson;
+import com.bancoxyz.bff.common.oauth.OAuthClienteProperties;
+import com.bancoxyz.bff.common.oauth.SolicitanteToken;
+import com.bancoxyz.bff.common.seguridad.ConversorJwtCanal;
 import com.bancoxyz.bff.common.seguridad.JwtProperties;
 import com.bancoxyz.bff.common.seguridad.JwtService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 
 /**
  * Infraestructura que los tres BFF comparten. Se importa explicitamente desde
@@ -23,7 +29,7 @@ import org.springframework.context.annotation.Configuration;
  * dentro de su propia {@code SecurityFilterChain}.
  */
 @Configuration
-@EnableConfigurationProperties({JwtProperties.class, CoreApiProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, CoreApiProperties.class, OAuthClienteProperties.class})
 public class BffCommonConfig {
 
     @Bean
@@ -32,10 +38,26 @@ public class BffCommonConfig {
     }
 
     @Bean
+    public JwtDecoder jwtDecoder(JwtService jwtService) {
+        return jwtService.decodificador();
+    }
+
+    @Bean
+    public ConversorJwtCanal conversorJwtCanal(JwtProperties propiedades) {
+        return new ConversorJwtCanal(propiedades);
+    }
+
+    @Bean
+    public SolicitanteToken solicitanteToken(OAuthClienteProperties propiedades, ObjectMapper objectMapper) {
+        return new SolicitanteToken(propiedades, objectMapper);
+    }
+
+    @Bean
     public CoreApiClient coreApiClient(CoreApiProperties propiedades,
                                        JwtProperties jwtProperties,
-                                       ObjectMapper objectMapper) {
-        return new CoreApiClient(propiedades, jwtProperties.canal(), objectMapper);
+                                       ObjectMapper objectMapper,
+                                       ObjectProvider<DiscoveryClient> descubrimientos) {
+        return new CoreApiClient(propiedades, jwtProperties.canal(), objectMapper, descubrimientos);
     }
 
     @Bean

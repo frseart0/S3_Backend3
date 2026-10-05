@@ -4,6 +4,20 @@ server:
 spring:
   application:
     name: banco-xyz-core-api
+  config:
+    import: optional:configserver:${CONFIG_SERVER:http://localhost:8888}
+  cloud:
+    config:
+      request-connect-timeout: 500
+      request-read-timeout: 500
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    admin:
+      fail-fast: false
 
   datasource:
     url: jdbc:postgresql://localhost:5432/banco_xyz
@@ -43,12 +57,29 @@ core:
     monto-maximo-operacion: 200000
     limite-diario: 400000
 
+  eventos:
+    habilitado: false
+    topico: banco.retiros.realizados
+    intervalo-ms: 2000
+
   demo:
     # Siembra idempotente de identidades de prueba sobre cuentas que existen en
     # el dataset legacy. En un entorno real esto lo haria el sistema de
     # onboarding de clientes.
     sembrar: true
     password: Banco2026*
+
+eureka:
+  client:
+    enabled: false
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
 
 springdoc:
   swagger-ui:

@@ -1,0 +1,40 @@
+server:
+  port: 9000
+
+spring:
+  application:
+    name: banco-xyz-auth-server
+  config:
+    import: optional:configserver:${CONFIG_SERVER:http://localhost:8888}
+  cloud:
+    config:
+      request-connect-timeout: 500
+      request-read-timeout: 500
+
+eureka:
+  client:
+    enabled: false
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
+auth:
+  issuer: http://banco-xyz-auth
+  secreto-hmac: ${OAUTH_HMAC_SECRET:secreto-oauth-banco-xyz-compartido-2026-cambiar}
+  client-secret: ${OAUTH_CLIENT_SECRET:banco-xyz-oauth-2026}
+  core-base-url: ${CORE_API_URL:http://localhost:8080}
+  clave-interna: ${CORE_INTERNAL_KEY:clave-interna-banco-xyz-2026}
+  web-access: 30m
+  mobile-access: 15m
+  mobile-refresh: 30d
+  atm-access: 3m
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+logging:
+  level:
+    root: INFO
+    com.bancoxyz.auth: DEBUG

@@ -1,9 +1,13 @@
 package com.bancoxyz.bff.atm.autenticacion;
 
 import com.bancoxyz.bff.atm.dto.SesionAtm;
+import com.bancoxyz.bff.atm.resiliencia.NucleoAtm;
 import com.bancoxyz.bff.atm.seguridad.SesionesCerradas;
-import com.bancoxyz.bff.common.core.CoreApiClient;
+import com.bancoxyz.bff.common.oauth.OAuthClienteProperties;
+import com.bancoxyz.bff.common.oauth.ResultadoToken;
+import com.bancoxyz.bff.common.oauth.SolicitanteToken;
 import com.bancoxyz.bff.common.seguridad.JwtService;
+import com.bancoxyz.bff.common.seguridad.TipoToken;
 import com.bancoxyz.bff.common.seguridad.UsuarioCanal;
 import com.bancoxyz.bff.common.seguridad.VerificacionIdentidad;
 import com.bancoxyz.domain.Canal;
@@ -36,14 +40,22 @@ public class SesionAtmController {
 
     private static final Logger log = LoggerFactory.getLogger(SesionAtmController.class);
 
-    private final CoreApiClient core;
+    private final NucleoAtm nucleo;
     private final JwtService jwt;
     private final SesionesCerradas sesionesCerradas;
+    private final OAuthClienteProperties oauth;
+    private final SolicitanteToken solicitante;
 
-    public SesionAtmController(CoreApiClient core, JwtService jwt, SesionesCerradas sesionesCerradas) {
-        this.core = core;
+    public SesionAtmController(NucleoAtm nucleo,
+                               JwtService jwt,
+                               SesionesCerradas sesionesCerradas,
+                               OAuthClienteProperties oauth,
+                               SolicitanteToken solicitante) {
+        this.nucleo = nucleo;
         this.jwt = jwt;
         this.sesionesCerradas = sesionesCerradas;
+        this.oauth = oauth;
+        this.solicitante = solicitante;
     }
 
     @PostMapping("/auth/sesion")
@@ -52,7 +64,15 @@ public class SesionAtmController {
                            @RequestHeader("X-Device-Key") String dispositivoClave,
                            @Valid @RequestBody SolicitudSesionAtm solicitud) {
 
-        var resultado = core.validarPin(new SolicitudPin(
+        if (oauth.remoto()) {
+            ResultadoToken token = solicitante.canalPin(
+                    Canal.ATM, solicitud.tarjeta(), solicitud.pin(), dispositivoId, dispositivoClave);
+            UsuarioCanal usuario = jwt.validar(token.accessToken(), TipoToken.ACCESO);
+            log.info("Sesion abierta en el cajero {} para la cuenta {}", dispositivoId, usuario.cuentaId());
+            return new SesionAtm(token.accessToken(), token.expiraEnSegundos(jwt.duracionAcceso()),
+                    primerNombre(usuario.nombre()), dispositivoId);
+        }
+        var resultado = nucleo.validarPin(new SolicitudPin(
                 solicitud.tarjeta(), solicitud.pin(), dispositivoId, dispositivoClave));
         UsuarioCanal usuario = VerificacionIdentidad.exigirAutenticado(resultado, Canal.ATM, dispositivoId);
 

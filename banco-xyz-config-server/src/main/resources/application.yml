@@ -1,0 +1,20 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: banco-xyz-config-server
+  profiles:
+    active: native
+  cloud:
+    config:
+      server:
+        native:
+          # mvn -pl corre desde el modulo (../config-repo). Docker fija CONFIG_REPO.
+          search-locations: file:${CONFIG_REPO:../config-repo}/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

@@ -2,7 +2,7 @@ package com.bancoxyz.bff.atm.operaciones;
 
 import com.bancoxyz.bff.atm.config.AtmProperties;
 import com.bancoxyz.bff.atm.dto.ComprobanteAtm;
-import com.bancoxyz.bff.common.core.CoreApiClient;
+import com.bancoxyz.bff.atm.resiliencia.NucleoAtm;
 import com.bancoxyz.bff.common.error.OperacionInvalidaException;
 import com.bancoxyz.bff.common.seguridad.UsuarioCanal;
 import com.bancoxyz.domain.Canal;
@@ -28,11 +28,11 @@ public class RetiroAtmService {
 
     private static final Logger log = LoggerFactory.getLogger(RetiroAtmService.class);
 
-    private final CoreApiClient core;
+    private final NucleoAtm nucleo;
     private final AtmProperties propiedades;
 
-    public RetiroAtmService(CoreApiClient core, AtmProperties propiedades) {
-        this.core = core;
+    public RetiroAtmService(NucleoAtm nucleo, AtmProperties propiedades) {
+        this.nucleo = nucleo;
         this.propiedades = propiedades;
     }
 
@@ -42,7 +42,7 @@ public class RetiroAtmService {
 
         var solicitud = new SolicitudRetiro(
                 monto, Canal.ATM.codigo(), claveIdempotencia, usuario.dispositivoId());
-        ComprobanteRetiro comprobante = core.retirar(usuario.cuentaId(), solicitud);
+        ComprobanteRetiro comprobante = nucleo.retirar(usuario.cuentaId(), solicitud);
 
         log.info("Retiro {} por {} en cajero {} sobre la cuenta {} (reintento={})",
                 comprobante.codigoAutorizacion(), comprobante.montoRetirado(),

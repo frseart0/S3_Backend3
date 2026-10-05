@@ -1,6 +1,9 @@
 package com.bancoxyz.bff.mobile.autenticacion;
 
 import com.bancoxyz.bff.common.core.CoreApiClient;
+import com.bancoxyz.bff.common.oauth.OAuthClienteProperties;
+import com.bancoxyz.bff.common.oauth.ResultadoToken;
+import com.bancoxyz.bff.common.oauth.SolicitanteToken;
 import com.bancoxyz.bff.common.seguridad.JwtService;
 import com.bancoxyz.bff.common.seguridad.TipoToken;
 import com.bancoxyz.bff.common.seguridad.UsuarioCanal;
@@ -29,15 +32,30 @@ public class AutenticacionMobileController {
 
     private final CoreApiClient core;
     private final JwtService jwt;
+    private final OAuthClienteProperties oauth;
+    private final SolicitanteToken solicitante;
 
-    public AutenticacionMobileController(CoreApiClient core, JwtService jwt) {
+    public AutenticacionMobileController(CoreApiClient core,
+                                         JwtService jwt,
+                                         OAuthClienteProperties oauth,
+                                         SolicitanteToken solicitante) {
         this.core = core;
         this.jwt = jwt;
+        this.oauth = oauth;
+        this.solicitante = solicitante;
     }
 
     @PostMapping("/login")
     @Operation(summary = "Emite access y refresh token con audiencia 'mobile'")
     public SesionMobile login(@Valid @RequestBody CredencialesMobile credenciales) {
+        if (oauth.remoto()) {
+            ResultadoToken token = solicitante.canalPassword(
+                    Canal.MOBILE, credenciales.usuario(), credenciales.password());
+            UsuarioCanal usuario = jwt.validar(token.accessToken(), TipoToken.ACCESO);
+            String refresco = token.refreshToken() == null ? "" : token.refreshToken();
+            return new SesionMobile(token.accessToken(), refresco,
+                    token.expiraEnSegundos(jwt.duracionAcceso()), usuario.nombre());
+        }
         var resultado = core.validarCredenciales(credenciales.usuario(), credenciales.password());
         UsuarioCanal usuario = VerificacionIdentidad.exigirAutenticado(resultado, Canal.MOBILE);
         return sesion(usuario, jwt.emitirRefresco(usuario));
@@ -51,6 +69,13 @@ public class AutenticacionMobileController {
     @PostMapping("/refresh")
     @Operation(summary = "Renueva el access token a partir de un refresh token vigente")
     public SesionMobile refrescar(@Valid @RequestBody SolicitudRefresco solicitud) {
+        if (oauth.remoto()) {
+            ResultadoToken token = solicitante.refrescar(Canal.MOBILE, solicitud.refreshToken());
+            UsuarioCanal usuario = jwt.validar(token.accessToken(), TipoToken.ACCESO);
+            String refresco = token.refreshToken() == null ? solicitud.refreshToken() : token.refreshToken();
+            return new SesionMobile(token.accessToken(), refresco,
+                    token.expiraEnSegundos(jwt.duracionAcceso()), usuario.nombre());
+        }
         UsuarioCanal usuario = jwt.validar(solicitud.refreshToken(), TipoToken.REFRESCO);
         return sesion(usuario, solicitud.refreshToken());
     }

@@ -3,6 +3,8 @@ package com.bancoxyz.core.cuentas;
 import com.bancoxyz.core.config.RetiroProperties;
 import com.bancoxyz.core.error.OperacionRechazadaException;
 import com.bancoxyz.core.error.RecursoNoEncontradoException;
+import com.bancoxyz.core.eventos.OutboxRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.bancoxyz.domain.contract.ComprobanteRetiro;
 import com.bancoxyz.domain.contract.SolicitudRetiro;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,13 +45,16 @@ class RetiroServiceTest {
     @Mock
     private RetiroRepository retiros;
 
+    @Mock
+    private OutboxRepository outbox;
+
     private RetiroService servicio;
 
     @BeforeEach
     void crearServicio() {
         var limites = new RetiroProperties(
                 new BigDecimal("1000"), new BigDecimal("200000"), new BigDecimal("400000"));
-        servicio = new RetiroService(retiros, limites, transaccionesSinBd());
+        servicio = new RetiroService(retiros, outbox, limites, transaccionesSinBd(), new ObjectMapper());
     }
 
     @Test
@@ -69,6 +74,7 @@ class RetiroServiceTest {
         verify(retiros).registrarOperacion(eq("clave-1"), anyString(), eq(CUENTA), eq("atm"),
                 eq(new BigDecimal("2000")), eq(new BigDecimal("5035.00")), eq("ATM-001"));
         verify(retiros).registrarMovimiento(eq(CUENTA), eq(new BigDecimal("2000")), eq("atm"), anyString());
+        verify(outbox).insertar(eq("retiro.realizado"), eq("clave-1"), anyString());
     }
 
     /** La segunda vez que llega la misma orden se devuelve el comprobante original. */

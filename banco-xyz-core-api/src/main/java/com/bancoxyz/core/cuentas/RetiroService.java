@@ -3,8 +3,12 @@ package com.bancoxyz.core.cuentas;
 import com.bancoxyz.core.config.RetiroProperties;
 import com.bancoxyz.core.error.OperacionRechazadaException;
 import com.bancoxyz.core.error.RecursoNoEncontradoException;
+import com.bancoxyz.core.eventos.EventoRetiroRealizado;
+import com.bancoxyz.core.eventos.OutboxRepository;
 import com.bancoxyz.domain.contract.ComprobanteRetiro;
 import com.bancoxyz.domain.contract.SolicitudRetiro;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -26,8 +30,8 @@ import java.util.Optional;
  *   <li><b>Aislamiento</b>: la fila del saldo se bloquea con
  *       {@code SELECT ... FOR UPDATE}, de modo que dos canales operando sobre la
  *       misma cuenta se serializan en vez de leer un saldo obsoleto.</li>
- *   <li><b>Atomicidad</b>: descontar el saldo, registrar la operacion y dejar el
- *       movimiento ocurren en la misma transaccion.</li>
+ *   <li><b>Atomicidad</b>: descontar el saldo, registrar la operacion, dejar el
+ *       movimiento y encolar el evento de Kafka ocurren en la misma transaccion.</li>
  * </ol>
  *
  * <p>La transaccion se maneja con {@link TransactionTemplate} y no con
@@ -42,16 +46,22 @@ public class RetiroService {
     private static final int LARGO_AUTORIZACION = 8;
 
     private final RetiroRepository retiros;
+    private final OutboxRepository outbox;
     private final RetiroProperties limites;
     private final TransactionTemplate transacciones;
+    private final ObjectMapper objectMapper;
     private final SecureRandom aleatorio = new SecureRandom();
 
     public RetiroService(RetiroRepository retiros,
+                         OutboxRepository outbox,
                          RetiroProperties limites,
-                         TransactionTemplate transacciones) {
+                         TransactionTemplate transacciones,
+                         ObjectMapper objectMapper) {
         this.retiros = retiros;
+        this.outbox = outbox;
         this.limites = limites;
         this.transacciones = transacciones;
+        this.objectMapper = objectMapper;
     }
 
     public ComprobanteRetiro retirar(long cuentaId, SolicitudRetiro solicitud) {
@@ -100,12 +110,23 @@ public class RetiroService {
             retiros.registrarOperacion(solicitud.claveIdempotencia(), codigo, cuentaId,
                     solicitud.canal(), monto, nuevoSaldo, solicitud.referenciaDispositivo());
             retiros.registrarMovimiento(cuentaId, monto, solicitud.canal(), codigo);
+            publicarEvento(new EventoRetiroRealizado(
+                    codigo, cuentaId, monto, solicitud.canal(), solicitud.claveIdempotencia(),
+                    nuevoSaldo, solicitud.referenciaDispositivo()));
 
             log.info("Retiro {} aplicado en cuenta {} por canal {}: saldo {} -> {}",
                     codigo, cuentaId, solicitud.canal(), saldo, nuevoSaldo);
 
             return new ComprobanteRetiro(codigo, cuentaId, monto, nuevoSaldo, Instant.now(), false);
         });
+    }
+
+    private void publicarEvento(EventoRetiroRealizado evento) {
+        try {
+            outbox.insertar("retiro.realizado", evento.claveIdempotencia(), objectMapper.writeValueAsString(evento));
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("No se pudo serializar el evento de retiro", ex);
+        }
     }
 
     private void validarSolicitud(SolicitudRetiro solicitud) {

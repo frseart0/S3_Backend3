@@ -59,10 +59,10 @@ class JwtServiceTest {
     @Test
     void rechazaUnTokenExpirado() throws InterruptedException {
         var propiedades = new JwtProperties(
-                SECRETO, "banco-xyz-test", Canal.WEB, Duration.ofMillis(1), null);
+                SECRETO, "banco-xyz-test", Canal.WEB, Duration.ofSeconds(1), null);
         var servicio = new JwtService(propiedades);
         String token = servicio.emitirAcceso(UsuarioCanal.de("jane.smith", 106L, "Jane Smith", Canal.WEB));
-        Thread.sleep(1100);
+        Thread.sleep(2500);
 
         assertThatThrownBy(() -> servicio.validar(token, TipoToken.ACCESO))
                 .isInstanceOf(TokenInvalidoException.class);
