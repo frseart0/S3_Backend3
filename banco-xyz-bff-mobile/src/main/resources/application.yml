@@ -43,6 +43,9 @@ bff:
 
   core-api:
     base-url: ${CORE_API_URL:http://localhost:8080}
+    cuentas-url: ${CUENTAS_URL:http://localhost:8086}
+    pagos-url: ${PAGOS_URL:http://localhost:8087}
+    clientes-url: ${CLIENTES_URL:http://localhost:8085}
     clave-interna: ${CORE_INTERNAL_KEY:clave-interna-banco-xyz-2026}
     timeout-conexion: 2s
     timeout-lectura: 5s
@@ -58,6 +61,33 @@ bff:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+resilience4j:
+  circuitbreaker:
+    circuitBreakerAspectOrder: 1
+    instances:
+      coreMobile:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 2
+        ignoreExceptions:
+          - com.bancoxyz.bff.common.core.CoreApiException
+  retry:
+    retryAspectOrder: 2
+    instances:
+      coreMobile:
+        maxAttempts: 2
+        waitDuration: 150ms
+        retryExceptions:
+          - org.springframework.web.client.ResourceAccessException
+  timelimiter:
+    timeLimiterAspectOrder: 3
+    instances:
+      coreMobile:
+        timeoutDuration: 5s
+        cancelRunningFuture: true
 
 logging:
   level:

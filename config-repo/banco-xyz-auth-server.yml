@@ -2,7 +2,7 @@ auth:
   issuer: http://banco-xyz-auth
   secreto-hmac: ${OAUTH_HMAC_SECRET:secreto-oauth-banco-xyz-compartido-2026-cambiar}
   client-secret: ${OAUTH_CLIENT_SECRET:banco-xyz-oauth-2026}
-  core-base-url: http://banco-xyz-core-api
+  core-base-url: http://banco-xyz-clientes
   clave-interna: ${CORE_INTERNAL_KEY:clave-interna-banco-xyz-2026}
   web-access: 30m
   mobile-access: 15m

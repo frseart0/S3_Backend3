@@ -1,0 +1,51 @@
+server:
+  port: 8443
+  ssl:
+    enabled: true
+    key-store: classpath:keystore.p12
+    key-store-password: ${GATEWAY_KEYSTORE_PASSWORD:banco-xyz-dev}
+    key-store-type: PKCS12
+    key-alias: banco-xyz
+
+spring:
+  application:
+    name: banco-xyz-gateway
+  config:
+    import: optional:configserver:${CONFIG_SERVER:http://localhost:8888}
+  cloud:
+    config:
+      request-connect-timeout: 500
+      request-read-timeout: 500
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: bff-web
+              uri: ${BFF_WEB_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/web/**
+            - id: bff-mobile
+              uri: ${BFF_MOBILE_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/mobile/**
+            - id: bff-atm
+              uri: ${BFF_ATM_URL:http://localhost:8083}
+              predicates:
+                - Path=/api/atm/**
+
+eureka:
+  client:
+    enabled: false
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: INFO

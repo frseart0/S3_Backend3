@@ -31,4 +31,20 @@ public class NotificacionRetiroRepository {
                 ON CONFLICT (clave_evento) DO NOTHING
                 """, claveEvento, codigoAutorizacion, cuentaId, monto, canal, payload);
     }
+
+    public void guardarTransaccion(String claveEvento,
+                                   String tipo,
+                                   String codigoAutorizacion,
+                                   Long cuentaId,
+                                   Long cuentaDestinoId,
+                                   BigDecimal monto,
+                                   String canal,
+                                   String payload) {
+        jdbc.update("""
+                INSERT INTO notificacion_transaccion
+                    (clave_evento, tipo, codigo_autorizacion, cuenta_id, cuenta_destino_id, monto, canal, payload)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (clave_evento) DO NOTHING
+                """, claveEvento, tipo, codigoAutorizacion, cuentaId, cuentaDestinoId, monto, canal, payload);
+    }
 }

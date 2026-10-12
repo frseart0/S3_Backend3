@@ -10,4 +10,5 @@ spring:
 
 notificaciones:
   topico: banco.retiros.realizados
+  topico-transacciones: banco.transacciones.completadas
   topico-dlq: banco.retiros.dlq

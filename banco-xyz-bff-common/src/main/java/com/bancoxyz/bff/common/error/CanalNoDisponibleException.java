@@ -6,11 +6,22 @@ package com.bancoxyz.bff.common.error;
  */
 public class CanalNoDisponibleException extends RuntimeException {
 
+    private final String codigo;
+
     public CanalNoDisponibleException(String mensaje) {
-        super(mensaje);
+        this("CAJERO_NO_DISPONIBLE", mensaje, null);
     }
 
     public CanalNoDisponibleException(String mensaje, Throwable causa) {
+        this("CAJERO_NO_DISPONIBLE", mensaje, causa);
+    }
+
+    public CanalNoDisponibleException(String codigo, String mensaje, Throwable causa) {
         super(mensaje, causa);
+        this.codigo = codigo;
+    }
+
+    public String codigo() {
+        return codigo;
     }
 }

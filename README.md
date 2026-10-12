@@ -1,5 +1,7 @@
 # Banco XYZ - Batch + Backend for Frontend
 
+Repositorio: https://github.com/frseart0/S3_Backend3
+
 ## Objetivo del proyecto (semanas 1-3)
 
 Reescribir 3 procesos legacy del banco como Jobs de Spring Batch, cumpliendo con:
@@ -54,14 +56,21 @@ Los datos originales del CSV **no se descartan silenciosamente**: cada fila term
 Monorepo Maven multi-modulo:
 
 ```
-banco-xyz-domain          Vocabulario compartido (Canal, EstadoRegistro, TipoCuenta) + db/schema-negocio.sql
-banco-xyz-batch           Jobs de las semanas 1-3 (sin cambios de logica)
-banco-xyz-core-api        :8080  API de dominio; unico acceso a PostgreSQL
-banco-xyz-bff-common      JWT por canal, CoreApiClient y manejo de errores
-banco-xyz-bff-web         :8081  respuestas completas y dashboard compuesto
-banco-xyz-bff-mobile      :8082  payload minimo, gzip y ETag
-banco-xyz-bff-atm         :8083  retiros, sesion corta y auditoria
-docs/                     Propuesta tecnica y coleccion HTTP
+banco-xyz-domain          Contratos compartidos y esquema SQL
+banco-xyz-batch           Jobs de transacciones, intereses y estados de cuenta
+banco-xyz-config-server   :8888  Spring Cloud Config
+banco-xyz-discovery       :8761  Eureka
+banco-xyz-auth-server     :9000  OAuth2 por canal
+banco-xyz-clientes        :8085  perfiles y credenciales
+banco-xyz-cuentas         :8086  apertura, cierre, mantenimiento y consultas
+banco-xyz-pagos           :8087  retiros, depositos, transferencias, pagos y outbox
+banco-xyz-core-api        :8080  reportes del batch
+banco-xyz-bff-common      cliente HTTP, JWT y errores de canal
+banco-xyz-bff-web         :8081  dashboard y reportes
+banco-xyz-bff-mobile      :8082  payload minimo
+banco-xyz-bff-atm         :8083  retiro y sesion corta
+banco-xyz-notificaciones  :8084  consumidor Kafka
+banco-xyz-gateway         :8443  HTTPS, enrutamiento y balanceo hacia los BFF
 ```
 
 Batch (`banco-xyz-batch/src/main/java/com/bancoxyz/batch/`):
@@ -110,6 +119,7 @@ cuentasanuales/                    Job 3: reader/processor/writer + Tasklet de e
 
 - `BankSkipPolicy`: solo permite saltar excepciones de validación de datos conocidas (o errores de parseo de línea); cualquier otra excepción aborta el Job. Límite configurable vía `batch.skip.limit` (default 50 por partición).
 - **Retry con backoff exponencial**: errores transitorios de escritura en BD (`TransientDataAccessException`) se reintentan hasta `batch.retry.limit` veces (default 3), con backoff configurable (`batch.retry.initial-interval-ms`, `multiplier`, `max-interval-ms`).
+- **Reejecución del Job**: si la ejecución termina en `FAILED`, `ReejecucionJobListener` llama a `JobOperator.restart` hasta `batch.restart.max-intentos` veces (default 2). El código de salida del proceso mira el último intento, no el primero.
 - `BankSkipListener`: registra cada item salteado en `batch_error_log` (job, step, etapa, detalle del item, mensaje de error) para trazabilidad/auditoría.
 - **Escalamiento vía Partitioning** (decisión de la Semana 3, en vez de un simple step multi-hilo): `LineRangePartitioner` divide cada CSV en `batch.partition.grid-size` particiones (default **4**) de tamaño similar, que se procesan en paralelo con un `TaskExecutorPartitionHandler` sobre un pool de `batch.partition.pool-size` hilos (default **4**). El tamaño de chunk se mantiene en **5** (heredado de la Semana 2). Estos valores están centralizados en `application.yml` y se pueden ajustar sin tocar código.
 - Cada fila persistida guarda en `procesado_por_hilo` el nombre del hilo del pool que la procesó, lo que permite verificar visualmente (con una simple consulta SQL) que el procesamiento efectivamente se paralelizó.
@@ -124,8 +134,10 @@ cuentasanuales/                    Job 3: reader/processor/writer + Tasklet de e
 ### 1. Levantar PostgreSQL
 
 ```bash
-docker compose up -d
+docker compose up -d postgres
 ```
+
+El stack completo (config, Eureka, dominio, BFF y gateway) se levanta despues de los jobs. El detalle esta en [instrucciones.md](instrucciones.md).
 
 ### 2. Compilar el proyecto
 
@@ -187,34 +199,49 @@ Tres BFF independientes consumen por HTTP el `core-api`. Ningun BFF habla con Po
 
 ```mermaid
 flowchart LR
-    navegador[Navegador] -->|"JWT aud=web"| bffWeb["bff-web :8081"]
-    movil[App Movil] -->|"JWT aud=mobile"| bffMobile["bff-mobile :8082"]
-    cajero[Cajero ATM] -->|"JWT aud=atm + X-Device-Id"| bffAtm["bff-atm :8083"]
-    bffWeb -->|"HTTP + X-Internal-Key"| core["core-api :8080"]
-    bffMobile -->|"HTTP + X-Internal-Key"| core
-    bffAtm -->|"HTTP + X-Internal-Key"| core
-    core --> db[("PostgreSQL banco_xyz")]
-    batch["banco-xyz-batch"] --> db
+    navegador[Navegador] -->|HTTPS| gateway["gateway :8443"]
+    movil[App movil] -->|HTTPS| gateway
+    cajero[Cajero] -->|HTTPS| gateway
+    gateway --> bffWeb[bff-web]
+    gateway --> bffMobile[bff-mobile]
+    gateway --> bffAtm[bff-atm]
+    bffWeb --> clientes[clientes]
+    bffWeb --> cuentas[cuentas]
+    bffWeb --> pagos[pagos]
+    bffWeb --> reportes[core-api]
+    bffAtm --> pagos
+    bffAtm --> cuentas
+    auth[auth-server] --> clientes
+    pagos --> kafka[Kafka]
+    kafka --> notas[notificaciones]
+    batch[batch] --> db[("PostgreSQL")]
+    cuentas --> db
+    pagos --> db
+    clientes --> db
 ```
 
 
 
 
-| Servicio               | Puerto | Contrato         | Autenticacion                              |
-| ---------------------- | ------ | ---------------- | ------------------------------------------ |
-| `banco-xyz-core-api`   | 8080   | `/internal/**`   | cabecera `X-Internal-Key`                  |
-| `banco-xyz-bff-web`    | 8081   | `/api/web/**`    | JWT `aud=web`, 30 min, `ROLE_WEB`          |
-| `banco-xyz-bff-mobile` | 8082   | `/api/mobile/**` | JWT `aud=mobile`, 15 min + refresh 30 dias |
-| `banco-xyz-bff-atm`    | 8083   | `/api/atm/**`    | tarjeta + PIN + `X-Device-Id`, JWT 3 min   |
+| Servicio | Puerto | Contrato | Autenticacion |
+| --- | --- | --- | --- |
+| `banco-xyz-gateway` | 8443 | `/api/web`, `/api/mobile`, `/api/atm` | TLS. Balancea con Eureka hacia el BFF |
+| `banco-xyz-clientes` | 8085 | `/internal/clientes`, `/internal/auth` | `X-Internal-Key` |
+| `banco-xyz-cuentas` | 8086 | `/internal/cuentas` | `X-Internal-Key` |
+| `banco-xyz-pagos` | 8087 | retiros, depositos, transferencias y pagos | `X-Internal-Key` |
+| `banco-xyz-core-api` | 8080 | `/internal/transacciones`, `/internal/reportes` | `X-Internal-Key` |
+| `banco-xyz-bff-web` | 8081 | `/api/web/**` | JWT `aud=web`, 30 min |
+| `banco-xyz-bff-mobile` | 8082 | `/api/mobile/**` | JWT `aud=mobile`, 15 min + refresh |
+| `banco-xyz-bff-atm` | 8083 | `/api/atm/**` | tarjeta + PIN + `X-Device-Id`, JWT 3 min |
 
 
 Un token de un canal es rechazado por los otros (validacion de audiencia). Swagger UI de cada servicio: `http://localhost:<puerto>/swagger-ui.html`.
 
 ### Que expone cada BFF
 
-- **Web**: `POST /api/web/auth/login`, `GET /api/web/dashboard` (perfil + saldo + 20 movimientos + intereses + estado anual en una llamada), `GET /api/web/movimientos` paginado, `GET /api/web/reportes/`*. DTOs con metadatos de auditoria del batch (`estado`, `motivo`, `procesadoPorHilo`).
-- **Movil**: `POST /api/mobile/auth/login` y `/auth/refresh`, `GET /api/mobile/inicio`, `/saldo`, `/movimientos`. Payloads planos, montos redondeados, anomalias filtradas, gzip y `ETag` (304 si no cambio el saldo).
-- **Cajero**: `POST /api/atm/auth/sesion`, `GET /api/atm/saldo`, `POST /api/atm/retiros` (multiplo de 1000, tope 100000, `Idempotency-Key` obligatoria), `GET /api/atm/movimientos/ultimos`, `POST /api/atm/sesion/cerrar`. Sin datos personales en las respuestas.
+- **Web**: `POST /api/web/auth/login`, `GET /api/web/dashboard`, `GET /api/web/movimientos`, `GET /api/web/reportes/*`, `GET /api/web/perfil-cliente` y `POST /api/web/depositos`.
+- **Movil**: `POST /api/mobile/auth/login` y `/auth/refresh`, `GET /api/mobile/inicio`, `/saldo`, `/movimientos`, `GET /api/mobile/perfil` y `POST /api/mobile/depositos`. Payloads planos, gzip y `ETag`.
+- **Cajero**: `POST /api/atm/auth/sesion`, `GET /api/atm/saldo`, `POST /api/atm/retiros`, `GET /api/atm/movimientos/ultimos`, `POST /api/atm/sesion/cerrar`. Circuit breaker, retry y time limiter contra pagos y cuentas.
 
 ### Credenciales de demostracion
 
@@ -240,38 +267,47 @@ En terminales distintas, despues de `docker compose up -d` y de haber compilado:
 .\mvnw.cmd -pl banco-xyz-batch spring-boot:run "-Dspring-boot.run.arguments=--spring.batch.job.name=calculoInteresesMensualesJob"
 .\mvnw.cmd -pl banco-xyz-batch spring-boot:run "-Dspring-boot.run.arguments=--spring.batch.job.name=estadosCuentaAnualesJob"
 
-# 2. Nucleo
+# 2. Dominio (cada uno en su terminal). Kafka tiene que estar arriba para pagos.
+.\mvnw.cmd -pl banco-xyz-clientes spring-boot:run
+.\mvnw.cmd -pl banco-xyz-cuentas spring-boot:run
+.\mvnw.cmd -pl banco-xyz-pagos spring-boot:run
 .\mvnw.cmd -pl banco-xyz-core-api spring-boot:run
 
-# 3. Canales (cada uno en su terminal)
+# 3. Auth, canales y borde
+.\mvnw.cmd -pl banco-xyz-auth-server spring-boot:run
 .\mvnw.cmd -pl banco-xyz-bff-web spring-boot:run
 .\mvnw.cmd -pl banco-xyz-bff-mobile spring-boot:run
 .\mvnw.cmd -pl banco-xyz-bff-atm spring-boot:run
+.\mvnw.cmd -pl banco-xyz-gateway spring-boot:run
 ```
 
-Sin los Jobs, el core-api arranca igual y siembra las identidades, pero saldo y movimientos responden 404.
+Las identidades de demostracion las siembra `banco-xyz-clientes`. Sin los Jobs, saldo y movimientos responden 404. El paso a paso completo esta en [instrucciones.md](instrucciones.md).
 
 ## Semanas 6-8: Spring Cloud, eventos y OAuth2
 
-Los BFF y el core-api siguen siendo los de las semanas 4-5. Alrededor se agregan el config server, Eureka, Resilience4j en el cajero, Kafka para los retiros y un authorization server OAuth2. El diagrama de topicos esta en [docs/arquitectura-eventos.md](docs/arquitectura-eventos.md).
+Clientes, cuentas y pagos son servicios distintos. El core-api solo consulta los reportes del batch. Config Server, Eureka, Resilience4j en los tres canales, Kafka y OAuth2 rodean a ese dominio. El diagrama de topicos esta en [docs/arquitectura-eventos.md](docs/arquitectura-eventos.md).
 
 | Servicio | Puerto | Rol |
 | --- | --- | --- |
 | `banco-xyz-config-server` | 8888 | Configuracion central, perfil native, carpeta `config-repo/` |
-| `banco-xyz-discovery` | 8761 | Eureka. Registra core-api, los tres BFF, auth y notificaciones |
-| `banco-xyz-auth-server` | 9000 | OAuth2. Grant `canal_password` y refresh del canal movil |
-| `banco-xyz-core-api` | 8080 | API de la migracion. Publica `banco.retiros.realizados` |
-| `banco-xyz-bff-web` | 8081 | Resource server, scope `web` |
-| `banco-xyz-bff-mobile` | 8082 | Resource server, scope `mobile` |
+| `banco-xyz-discovery` | 8761 | Eureka |
+| `banco-xyz-auth-server` | 9000 | OAuth2. Grant `canal_password`. Valida la identidad contra clientes |
+| `banco-xyz-clientes` | 8085 | Alta, perfil y credenciales |
+| `banco-xyz-cuentas` | 8086 | Apertura, cierre, mantenimiento y lecturas |
+| `banco-xyz-pagos` | 8087 | Dinero y publicacion al outbox |
+| `banco-xyz-core-api` | 8080 | Reportes del batch |
+| `banco-xyz-bff-web` | 8081 | Resource server, scope `web`, con circuit breaker |
+| `banco-xyz-bff-mobile` | 8082 | Resource server, scope `mobile`, con circuit breaker |
 | `banco-xyz-bff-atm` | 8083 | Resource server con circuit breaker, retry y time limiter |
-| `banco-xyz-notificaciones` | 8084 | Consume el topico de retiros |
+| `banco-xyz-gateway` | 8443 | TLS y `lb://` hacia cada BFF |
+| `banco-xyz-notificaciones` | 8084 | Consume retiros y transacciones completadas |
 | Kafka | 9092 | Broker KRaft, sin ZooKeeper |
 
 Sin el config server los servicios siguen levantando con su `application.yml` local (`spring.config.import` es opcional) y firman el JWT ellos mismos (`bff.oauth2.modo=local`). En Docker el config-repo pasa el modo a `authorization-server`: el login le pide el token al auth server y los BFF solo lo validan.
 
 ### Patron de eventos
 
-Notificacion de eventos con outbox transaccional. El retiro descuenta el saldo y deja la fila en `outbox_evento` en la misma transaccion. Un publicador la manda a `banco.retiros.realizados`. `banco-xyz-notificaciones` guarda el comprobante. Si el consumo falla, el mensaje termina en `banco.retiros.dlq`.
+Notificacion de eventos con outbox transaccional en `banco-xyz-pagos`. El movimiento de dinero y la fila de `outbox_evento` se confirman juntos. Los retiros salen por `banco.retiros.realizados`. Depositos, pagos y transferencias salen por `banco.transacciones.completadas`. Si el consumo falla, el mensaje termina en `banco.retiros.dlq`.
 
 ### OAuth2
 
@@ -297,4 +333,6 @@ Los Jobs batch no van en el compose: hay que ejecutarlos una vez para que exista
 docker compose up -d --build
 ```
 
-Orden interno: Postgres y Kafka, config server y Eureka, core-api, auth server, BFF y notificaciones. Eureka queda en `http://localhost:8761`. El cajero, si el nucleo no responde, contesta 503 `CAJERO_NO_DISPONIBLE` en lugar de caerse.
+Orden interno: Postgres y Kafka, config server y Eureka, clientes, cuentas, pagos y reportes, auth server, BFF, gateway y notificaciones. Eureka queda en `http://localhost:8761`. El borde publico es `https://localhost:8443` (certificado de desarrollo, contrasena `banco-xyz-dev`). El cajero, si pagos o cuentas no responden, contesta 503 `CAJERO_NO_DISPONIBLE`. Web y movil contestan 503 `CANAL_NO_DISPONIBLE`.
+
+El despliegue en AWS esta descrito en [despliegue.md](despliegue.md).

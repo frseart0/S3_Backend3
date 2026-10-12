@@ -26,4 +26,7 @@ bff:
     client-secret: ${OAUTH_CLIENT_SECRET:banco-xyz-oauth-2026}
   core-api:
     base-url: http://banco-xyz-core-api
+    cuentas-url: http://banco-xyz-cuentas
+    pagos-url: http://banco-xyz-pagos
+    clientes-url: http://banco-xyz-clientes
     clave-interna: ${CORE_INTERNAL_KEY:clave-interna-banco-xyz-2026}

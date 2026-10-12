@@ -12,6 +12,9 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "bff.core-api")
 public record CoreApiProperties(
         String baseUrl,
+        String cuentasUrl,
+        String pagosUrl,
+        String clientesUrl,
         String claveInterna,
         Duration timeoutConexion,
         Duration timeoutLectura) {
@@ -19,6 +22,15 @@ public record CoreApiProperties(
     public CoreApiProperties {
         if (baseUrl == null || baseUrl.isBlank()) {
             throw new IllegalArgumentException("bff.core-api.base-url es obligatorio");
+        }
+        if (cuentasUrl == null || cuentasUrl.isBlank()) {
+            cuentasUrl = "http://localhost:8086";
+        }
+        if (pagosUrl == null || pagosUrl.isBlank()) {
+            pagosUrl = "http://localhost:8087";
+        }
+        if (clientesUrl == null || clientesUrl.isBlank()) {
+            clientesUrl = "http://localhost:8085";
         }
         if (claveInterna == null || claveInterna.isBlank()) {
             throw new IllegalArgumentException("bff.core-api.clave-interna es obligatoria");

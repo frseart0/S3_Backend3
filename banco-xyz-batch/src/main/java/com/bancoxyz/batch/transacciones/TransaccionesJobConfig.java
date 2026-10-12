@@ -2,6 +2,7 @@ package com.bancoxyz.batch.transacciones;
 
 import com.bancoxyz.batch.common.listener.BankSkipListener;
 import com.bancoxyz.batch.common.listener.JobSummaryListener;
+import com.bancoxyz.batch.common.listener.ReejecucionJobListener;
 import com.bancoxyz.batch.common.partition.LineRangePartitioner;
 import com.bancoxyz.batch.common.partition.PartitionHandlerFactory;
 import com.bancoxyz.batch.common.policy.BankSkipPolicy;
@@ -76,9 +77,12 @@ public class TransaccionesJobConfig {
     }
 
     @Bean
-    public Job reporteTransaccionesDiariasJob(Step transaccionesPartitionStep, Step resumenDiarioStep) {
+    public Job reporteTransaccionesDiariasJob(Step transaccionesPartitionStep,
+                                              Step resumenDiarioStep,
+                                              ReejecucionJobListener reejecucion) {
         return new JobBuilder(JOB_NAME, jobRepository)
                 .listener(new JobSummaryListener())
+                .listener(reejecucion)
                 .start(transaccionesPartitionStep)
                 .next(resumenDiarioStep)
                 .build();

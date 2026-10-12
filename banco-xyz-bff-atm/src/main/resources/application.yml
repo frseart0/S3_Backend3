@@ -35,6 +35,9 @@ bff:
 
   core-api:
     base-url: ${CORE_API_URL:http://localhost:8080}
+    cuentas-url: ${CUENTAS_URL:http://localhost:8086}
+    pagos-url: ${PAGOS_URL:http://localhost:8087}
+    clientes-url: ${CLIENTES_URL:http://localhost:8085}
     clave-interna: ${CORE_INTERNAL_KEY:clave-interna-banco-xyz-2026}
     # Timeouts agresivos: nadie espera 8 segundos frente a un cajero.
     timeout-conexion: 1s

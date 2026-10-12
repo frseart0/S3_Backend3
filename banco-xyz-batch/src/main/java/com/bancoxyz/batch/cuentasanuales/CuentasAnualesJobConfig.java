@@ -2,6 +2,7 @@ package com.bancoxyz.batch.cuentasanuales;
 
 import com.bancoxyz.batch.common.listener.BankSkipListener;
 import com.bancoxyz.batch.common.listener.JobSummaryListener;
+import com.bancoxyz.batch.common.listener.ReejecucionJobListener;
 import com.bancoxyz.batch.common.partition.LineRangePartitioner;
 import com.bancoxyz.batch.common.partition.PartitionHandlerFactory;
 import com.bancoxyz.batch.common.policy.BankSkipPolicy;
@@ -76,9 +77,12 @@ public class CuentasAnualesJobConfig {
     }
 
     @Bean
-    public Job estadosCuentaAnualesJob(Step cuentasAnualesPartitionStep, Step estadoCuentaStep) {
+    public Job estadosCuentaAnualesJob(Step cuentasAnualesPartitionStep,
+                                       Step estadoCuentaStep,
+                                       ReejecucionJobListener reejecucion) {
         return new JobBuilder(JOB_NAME, jobRepository)
                 .listener(new JobSummaryListener())
+                .listener(reejecucion)
                 .start(cuentasAnualesPartitionStep)
                 .next(estadoCuentaStep)
                 .build();

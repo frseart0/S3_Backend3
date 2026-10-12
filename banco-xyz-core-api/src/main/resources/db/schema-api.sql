@@ -61,12 +61,31 @@ CREATE TABLE IF NOT EXISTS operaciones_cuenta (
     clave_idempotencia      VARCHAR(80) NOT NULL UNIQUE,
     codigo_autorizacion     VARCHAR(20) NOT NULL,
     cuenta_id               BIGINT NOT NULL,
+    cuenta_destino_id       BIGINT,
     tipo                    VARCHAR(20) NOT NULL,
     canal                   VARCHAR(10) NOT NULL,
     monto                   NUMERIC(15, 2) NOT NULL,
     saldo_resultante        NUMERIC(15, 2) NOT NULL,
     referencia_dispositivo  VARCHAR(40),
     realizado_en            TIMESTAMP NOT NULL DEFAULT now()
+);
+
+ALTER TABLE operaciones_cuenta ADD COLUMN IF NOT EXISTS cuenta_destino_id BIGINT;
+
+-- ---------------------------------------------------------------------------
+-- Ciclo de vida de la cuenta (apertura, mantenimiento, cierre). Las cuentas
+-- que solo existen por el batch no tienen fila: se tratan como abiertas
+-- hasta que alguien las cierre.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS cuenta (
+    cuenta_id        BIGINT PRIMARY KEY,
+    tipo             VARCHAR(20) NOT NULL,
+    estado           VARCHAR(20) NOT NULL,
+    alias            VARCHAR(80),
+    cliente_usuario  VARCHAR(60),
+    abierta_en       TIMESTAMP NOT NULL DEFAULT now(),
+    cerrada_en       TIMESTAMP,
+    actualizado_en   TIMESTAMP NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_operaciones_cuenta_fecha

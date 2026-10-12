@@ -1,0 +1,67 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: banco-xyz-pagos
+  config:
+    import: optional:configserver:${CONFIG_SERVER:http://localhost:8888}
+  cloud:
+    config:
+      request-connect-timeout: 500
+      request-read-timeout: 500
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    admin:
+      fail-fast: false
+  datasource:
+    url: jdbc:postgresql://localhost:5432/banco_xyz
+    username: banco_xyz
+    password: banco_xyz
+    driver-class-name: org.postgresql.Driver
+  sql:
+    init:
+      mode: always
+      schema-locations:
+        - classpath:db/schema-negocio.sql
+        - classpath:db/schema-api.sql
+  jackson:
+    default-property-inclusion: non_null
+
+core:
+  seguridad:
+    clave-interna: ${CORE_INTERNAL_KEY:clave-interna-banco-xyz-2026}
+    max-intentos-fallidos: 3
+  retiro:
+    monto-minimo: 1000
+    monto-maximo-operacion: 200000
+    limite-diario: 400000
+  eventos:
+    habilitado: false
+    topico: banco.retiros.realizados
+    topico-transacciones: banco.transacciones.completadas
+    intervalo-ms: 2000
+
+eureka:
+  client:
+    enabled: false
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    root: INFO
+    com.bancoxyz.pagos: DEBUG

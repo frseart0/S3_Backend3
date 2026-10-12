@@ -99,7 +99,7 @@ services:
         condition: service_healthy
       discovery:
         condition: service_healthy
-      core-api:
+      clientes:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/actuator/health"]
@@ -123,6 +123,84 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      config-server:
+        condition: service_healthy
+      discovery:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 50s
+
+  clientes:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: banco-xyz-clientes
+    image: banco-xyz-clientes
+    container_name: banco-xyz-clientes
+    environment:
+      CONFIG_SERVER: http://config-server:8888
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      discovery:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 50s
+
+  cuentas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: banco-xyz-cuentas
+    image: banco-xyz-cuentas
+    container_name: banco-xyz-cuentas
+    environment:
+      CONFIG_SERVER: http://config-server:8888
+    ports:
+      - "8086:8086"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      discovery:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 50s
+
+  pagos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: banco-xyz-pagos
+    image: banco-xyz-pagos
+    container_name: banco-xyz-pagos
+    environment:
+      CONFIG_SERVER: http://config-server:8888
+    ports:
+      - "8087:8087"
+    depends_on:
+      postgres:
+        condition: service_healthy
       kafka:
         condition: service_healthy
       config-server:
@@ -130,7 +208,7 @@ services:
       discovery:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8087/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -156,6 +234,12 @@ services:
       auth-server:
         condition: service_healthy
       core-api:
+        condition: service_healthy
+      clientes:
+        condition: service_healthy
+      cuentas:
+        condition: service_healthy
+      pagos:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
@@ -185,6 +269,12 @@ services:
         condition: service_healthy
       core-api:
         condition: service_healthy
+      clientes:
+        condition: service_healthy
+      cuentas:
+        condition: service_healthy
+      pagos:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
       interval: 10s
@@ -213,8 +303,45 @@ services:
         condition: service_healthy
       core-api:
         condition: service_healthy
+      clientes:
+        condition: service_healthy
+      cuentas:
+        condition: service_healthy
+      pagos:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 50s
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: banco-xyz-gateway
+    image: banco-xyz-gateway
+    container_name: banco-xyz-gateway
+    environment:
+      CONFIG_SERVER: http://config-server:8888
+      GATEWAY_KEYSTORE_PASSWORD: banco-xyz-dev
+    ports:
+      - "8443:8443"
+    depends_on:
+      config-server:
+        condition: service_healthy
+      discovery:
+        condition: service_healthy
+      bff-web:
+        condition: service_healthy
+      bff-mobile:
+        condition: service_healthy
+      bff-atm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-kf", "https://localhost:8443/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 18

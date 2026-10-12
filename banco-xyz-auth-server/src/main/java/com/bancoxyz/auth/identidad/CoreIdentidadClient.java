@@ -11,8 +11,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
- * El authorization server no guarda contrasenas. Le pregunta al core-api, que
- * es el dueno de {@code usuarios_canal}, y traduce el resultado a un token.
+ * El authorization server no guarda contrasenas. Le pregunta al servicio de
+ * clientes, dueno de {@code usuarios_canal}, y traduce el resultado a un token.
  */
 @Component
 public class CoreIdentidadClient {

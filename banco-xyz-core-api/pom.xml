@@ -12,7 +12,7 @@
 
     <artifactId>banco-xyz-core-api</artifactId>
     <name>banco-xyz-core-api</name>
-    <description>API de dominio del Banco XYZ sobre los datos generados por los Jobs batch</description>
+    <description>Consultas de los reportes generados por los Jobs batch</description>
     <packaging>jar</packaging>
 
     <dependencies>
@@ -30,10 +30,6 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-config</artifactId>
         </dependency>
@@ -48,14 +44,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
-        </dependency>
-
-        <!-- Solo el modulo de criptografia: el core-api no usa la cadena de
-             filtros de Spring Security, se protege con X-Internal-Key, pero si
-             necesita BCrypt para verificar contrasenas y PIN. -->
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
         <dependency>

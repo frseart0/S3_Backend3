@@ -1,7 +1,8 @@
 package com.bancoxyz.bff.mobile.cuenta;
 
-import com.bancoxyz.bff.common.core.CoreApiClient;
+import com.bancoxyz.bff.common.resiliencia.Espera;
 import com.bancoxyz.bff.common.seguridad.UsuarioCanal;
+import com.bancoxyz.bff.mobile.resiliencia.LlamadasNucleoMobile;
 import com.bancoxyz.bff.mobile.config.MobileProperties;
 import com.bancoxyz.bff.mobile.dto.InicioMobile;
 import com.bancoxyz.bff.mobile.dto.MovimientoMobile;
@@ -23,22 +24,22 @@ import java.util.List;
 @Service
 public class CuentaMobileService {
 
-    private final CoreApiClient core;
+    private final LlamadasNucleoMobile nucleo;
     private final MobileProperties propiedades;
 
-    public CuentaMobileService(CoreApiClient core, MobileProperties propiedades) {
-        this.core = core;
+    public CuentaMobileService(LlamadasNucleoMobile nucleo, MobileProperties propiedades) {
+        this.nucleo = nucleo;
         this.propiedades = propiedades;
     }
 
     public InicioMobile inicio(UsuarioCanal usuario) {
-        SaldoMobile saldo = SaldoMobile.desde(core.saldo(usuario.cuentaId()));
+        SaldoMobile saldo = SaldoMobile.desde(Espera.join(nucleo.saldo(usuario.cuentaId())));
         List<MovimientoMobile> movimientos = movimientos(usuario, propiedades.movimientosInicio());
         return new InicioMobile(usuario.nombre(), saldo, movimientos);
     }
 
     public SaldoMobile saldo(UsuarioCanal usuario) {
-        return SaldoMobile.desde(core.saldo(usuario.cuentaId()));
+        return SaldoMobile.desde(Espera.join(nucleo.saldo(usuario.cuentaId())));
     }
 
     public List<MovimientoMobile> movimientos(UsuarioCanal usuario, int limite) {
@@ -46,7 +47,7 @@ public class CuentaMobileService {
 
         // Se piden algunos extra porque el filtro de anomalias puede descartar
         // filas y la lista debe llegar completa a la primera pantalla.
-        var pagina = core.movimientos(usuario.cuentaId(), null, null, 0, solicitados * 2);
+        var pagina = Espera.join(nucleo.movimientos(usuario.cuentaId(), null, null, 0, solicitados * 2));
 
         return pagina.contenido().stream()
                 .filter(this::esConfiable)

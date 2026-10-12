@@ -22,6 +22,9 @@
         <module>banco-xyz-domain</module>
         <module>banco-xyz-batch</module>
         <module>banco-xyz-core-api</module>
+        <module>banco-xyz-clientes</module>
+        <module>banco-xyz-cuentas</module>
+        <module>banco-xyz-pagos</module>
         <module>banco-xyz-bff-common</module>
         <module>banco-xyz-bff-web</module>
         <module>banco-xyz-bff-mobile</module>
@@ -30,6 +33,7 @@
         <module>banco-xyz-discovery</module>
         <module>banco-xyz-auth-server</module>
         <module>banco-xyz-notificaciones</module>
+        <module>banco-xyz-gateway</module>
     </modules>
 
     <properties>

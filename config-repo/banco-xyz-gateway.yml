@@ -1,0 +1,18 @@
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: bff-web
+              uri: lb://banco-xyz-bff-web
+              predicates:
+                - Path=/api/web/**
+            - id: bff-mobile
+              uri: lb://banco-xyz-bff-mobile
+              predicates:
+                - Path=/api/mobile/**
+            - id: bff-atm
+              uri: lb://banco-xyz-bff-atm
+              predicates:
+                - Path=/api/atm/**

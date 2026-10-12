@@ -1,17 +1,24 @@
 package com.bancoxyz.bff.common.core;
 
 import com.bancoxyz.domain.Canal;
+import com.bancoxyz.domain.contract.ComprobanteOperacion;
 import com.bancoxyz.domain.contract.ComprobanteRetiro;
+import com.bancoxyz.domain.contract.CuentaOperativa;
 import com.bancoxyz.domain.contract.DetalleInteres;
 import com.bancoxyz.domain.contract.EstadoCuentaAnual;
 import com.bancoxyz.domain.contract.PaginaMovimientos;
+import com.bancoxyz.domain.contract.PerfilCliente;
 import com.bancoxyz.domain.contract.PerfilCuenta;
 import com.bancoxyz.domain.contract.ResultadoAutenticacion;
 import com.bancoxyz.domain.contract.ResumenDiario;
 import com.bancoxyz.domain.contract.SaldoCuenta;
+import com.bancoxyz.domain.contract.SolicitudAperturaCuenta;
 import com.bancoxyz.domain.contract.SolicitudCredenciales;
+import com.bancoxyz.domain.contract.SolicitudMantenimientoCuenta;
+import com.bancoxyz.domain.contract.SolicitudMovimiento;
 import com.bancoxyz.domain.contract.SolicitudPin;
 import com.bancoxyz.domain.contract.SolicitudRetiro;
+import com.bancoxyz.domain.contract.SolicitudTransferencia;
 import com.bancoxyz.domain.contract.TransaccionDiaria;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,17 +38,19 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Unico punto de entrada de los BFF al core-api. Centraliza la cabecera
- * {@code X-Internal-Key}, el {@code X-Channel} de trazabilidad, los timeouts y
- * la traduccion de errores HTTP a {@link CoreApiException}, para que cada BFF
- * se dedique solo a darle forma a los datos de su cliente.
+ * Punto de entrada de los BFF a los servicios de dominio. Reportes, cuentas,
+ * pagos y clientes tienen su propia URL. La cabecera {@code X-Internal-Key}
+ * y la traduccion de errores son las mismas para todos.
  */
 public class CoreApiClient {
 
     private static final String CABECERA_CLAVE_INTERNA = "X-Internal-Key";
     private static final String CABECERA_CANAL = "X-Channel";
 
-    private final RestClient restClient;
+    private final RestClient reportes;
+    private final RestClient cuentas;
+    private final RestClient pagos;
+    private final RestClient clientes;
     private final ObjectMapper objectMapper;
     private final Canal canal;
 
@@ -51,28 +60,36 @@ public class CoreApiClient {
                          ObjectProvider<DiscoveryClient> descubrimientos) {
         this.canal = canal;
         this.objectMapper = objectMapper;
+        this.reportes = cliente(propiedades.baseUrl(), propiedades, descubrimientos);
+        this.cuentas = cliente(propiedades.cuentasUrl(), propiedades, descubrimientos);
+        this.pagos = cliente(propiedades.pagosUrl(), propiedades, descubrimientos);
+        this.clientes = cliente(propiedades.clientesUrl(), propiedades, descubrimientos);
+    }
 
+    private RestClient cliente(String baseUrl,
+                               CoreApiProperties propiedades,
+                               ObjectProvider<DiscoveryClient> descubrimientos) {
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout((int) propiedades.timeoutConexion().toMillis());
         factory.setReadTimeout((int) propiedades.timeoutLectura().toMillis());
 
         var builder = RestClient.builder()
-                .baseUrl(propiedades.baseUrl())
+                .baseUrl(baseUrl)
                 .requestFactory(factory)
                 .defaultHeader(CABECERA_CLAVE_INTERNA, propiedades.claveInterna())
                 .defaultHeader(CABECERA_CANAL, canal.codigo())
                 .defaultStatusHandler(HttpStatusCode::isError, (peticion, respuesta) -> {
                     throw traducirError(respuesta.getStatusCode(), respuesta.getBody());
                 });
-        if (hayQueDescubrir(propiedades.baseUrl())) {
+        if (hayQueDescubrir(baseUrl)) {
             DiscoveryClient discovery = descubrimientos.getIfAvailable();
             if (discovery == null) {
                 throw new IllegalStateException(
-                        "bff.core-api.base-url apunta a un servicio de Eureka pero el discovery no esta habilitado");
+                        "La URL " + baseUrl + " apunta a un servicio de Eureka pero el discovery no esta habilitado");
             }
             builder.requestInterceptor(new InterceptorDescubrimiento(discovery));
         }
-        this.restClient = builder.build();
+        return builder.build();
     }
 
     private static boolean hayQueDescubrir(String baseUrl) {
@@ -86,7 +103,7 @@ public class CoreApiClient {
     // ----------------------------------------------------------------- auth
 
     public ResultadoAutenticacion validarCredenciales(String usuario, String password) {
-        return restClient.post()
+        return clientes.post()
                 .uri("/internal/auth/credenciales")
                 .body(new SolicitudCredenciales(usuario, password, canal.codigo()))
                 .retrieve()
@@ -94,7 +111,7 @@ public class CoreApiClient {
     }
 
     public ResultadoAutenticacion validarPin(SolicitudPin solicitud) {
-        return restClient.post()
+        return clientes.post()
                 .uri("/internal/auth/pin")
                 .body(solicitud)
                 .retrieve()
@@ -104,14 +121,14 @@ public class CoreApiClient {
     // --------------------------------------------------------------- cuenta
 
     public PerfilCuenta perfil(Long cuentaId) {
-        return restClient.get()
+        return cuentas.get()
                 .uri("/internal/cuentas/{id}/perfil", cuentaId)
                 .retrieve()
                 .body(PerfilCuenta.class);
     }
 
     public SaldoCuenta saldo(Long cuentaId) {
-        return restClient.get()
+        return cuentas.get()
                 .uri("/internal/cuentas/{id}/saldo", cuentaId)
                 .retrieve()
                 .body(SaldoCuenta.class);
@@ -122,7 +139,7 @@ public class CoreApiClient {
                                          LocalDate hasta,
                                          int pagina,
                                          int tamano) {
-        return restClient.get()
+        return cuentas.get()
                 .uri(constructor -> constructor
                         .path("/internal/cuentas/{id}/movimientos")
                         .queryParamIfPresent("desde", Optional.ofNullable(desde))
@@ -135,14 +152,14 @@ public class CoreApiClient {
     }
 
     public DetalleInteres intereses(Long cuentaId) {
-        return restClient.get()
+        return cuentas.get()
                 .uri("/internal/cuentas/{id}/intereses", cuentaId)
                 .retrieve()
                 .body(DetalleInteres.class);
     }
 
     public List<EstadoCuentaAnual> estadosAnuales(Long cuentaId) {
-        return restClient.get()
+        return cuentas.get()
                 .uri("/internal/cuentas/{id}/estados-anuales", cuentaId)
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {
@@ -150,17 +167,71 @@ public class CoreApiClient {
     }
 
     public ComprobanteRetiro retirar(Long cuentaId, SolicitudRetiro solicitud) {
-        return restClient.post()
+        return pagos.post()
                 .uri("/internal/cuentas/{id}/retiros", cuentaId)
                 .body(solicitud)
                 .retrieve()
                 .body(ComprobanteRetiro.class);
     }
 
+    public PerfilCliente perfilCliente(String usuario) {
+        return clientes.get()
+                .uri("/internal/clientes/{usuario}", usuario)
+                .retrieve()
+                .body(PerfilCliente.class);
+    }
+
+    public ComprobanteOperacion depositar(Long cuentaId, SolicitudMovimiento solicitud) {
+        return pagos.post()
+                .uri("/internal/cuentas/{id}/depositos", cuentaId)
+                .body(solicitud)
+                .retrieve()
+                .body(ComprobanteOperacion.class);
+    }
+
+    public ComprobanteOperacion pagar(Long cuentaId, SolicitudMovimiento solicitud) {
+        return pagos.post()
+                .uri("/internal/cuentas/{id}/pagos", cuentaId)
+                .body(solicitud)
+                .retrieve()
+                .body(ComprobanteOperacion.class);
+    }
+
+    public ComprobanteOperacion transferir(Long cuentaId, SolicitudTransferencia solicitud) {
+        return pagos.post()
+                .uri("/internal/cuentas/{id}/transferencias", cuentaId)
+                .body(solicitud)
+                .retrieve()
+                .body(ComprobanteOperacion.class);
+    }
+
+    public CuentaOperativa abrirCuenta(SolicitudAperturaCuenta solicitud) {
+        return cuentas.post()
+                .uri("/internal/cuentas")
+                .body(solicitud)
+                .retrieve()
+                .body(CuentaOperativa.class);
+    }
+
+    public CuentaOperativa cerrarCuenta(Long cuentaId) {
+        return cuentas.post()
+                .uri("/internal/cuentas/{id}/cierre", cuentaId)
+                .retrieve()
+                .body(CuentaOperativa.class);
+    }
+
+    public CuentaOperativa mantenerCuenta(Long cuentaId, SolicitudMantenimientoCuenta solicitud) {
+        return cuentas.patch()
+                .uri("/internal/cuentas/{id}", cuentaId)
+                .body(solicitud)
+                .retrieve()
+                .body(CuentaOperativa.class);
+    }
+
     // -------------------------------------------------------------- reportes
 
     public List<TransaccionDiaria> transacciones(LocalDate fecha, String estado, int limite) {
-        return restClient.get()
+        return reportes.get()
                 .uri(constructor -> constructor
                         .path("/internal/transacciones")
                         .queryParamIfPresent("fecha", Optional.ofNullable(fecha))
@@ -173,7 +244,7 @@ public class CoreApiClient {
     }
 
     public List<ResumenDiario> resumenDiario(LocalDate fecha) {
-        return restClient.get()
+        return reportes.get()
                 .uri(constructor -> constructor
                         .path("/internal/reportes/resumen-diario")
                         .queryParamIfPresent("fecha", Optional.ofNullable(fecha))

@@ -21,6 +21,12 @@ public class KafkaErroresConfig {
     }
 
     @Bean
+    public NewTopic topicoTransacciones(
+            @Value("${notificaciones.topico-transacciones:banco.transacciones.completadas}") String topico) {
+        return TopicBuilder.name(topico).partitions(1).replicas(1).build();
+    }
+
+    @Bean
     public NewTopic topicoDlq(@Value("${notificaciones.topico-dlq:banco.retiros.dlq}") String topico) {
         return TopicBuilder.name(topico).partitions(1).replicas(1).build();
     }

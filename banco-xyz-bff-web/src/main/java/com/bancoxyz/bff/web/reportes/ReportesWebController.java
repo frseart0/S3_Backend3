@@ -1,7 +1,8 @@
 package com.bancoxyz.bff.web.reportes;
 
-import com.bancoxyz.bff.common.core.CoreApiClient;
+import com.bancoxyz.bff.common.resiliencia.Espera;
 import com.bancoxyz.bff.web.dto.ResumenDiarioWeb;
+import com.bancoxyz.bff.web.resiliencia.LlamadasNucleoWeb;
 import com.bancoxyz.bff.web.dto.TransaccionDiariaWeb;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,10 +25,10 @@ import java.util.List;
 @Tag(name = "Reportes web")
 public class ReportesWebController {
 
-    private final CoreApiClient core;
+    private final LlamadasNucleoWeb nucleo;
 
-    public ReportesWebController(CoreApiClient core) {
-        this.core = core;
+    public ReportesWebController(LlamadasNucleoWeb nucleo) {
+        this.nucleo = nucleo;
     }
 
     @GetMapping("/transacciones-diarias")
@@ -36,7 +37,7 @@ public class ReportesWebController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
             @RequestParam(required = false) String estado,
             @RequestParam(defaultValue = "50") int limite) {
-        return core.transacciones(fecha, estado, limite).stream()
+        return Espera.join(nucleo.transacciones(fecha, estado, limite)).stream()
                 .map(TransaccionDiariaWeb::desde)
                 .toList();
     }
@@ -45,7 +46,7 @@ public class ReportesWebController {
     @Operation(summary = "Resumen diario agregado: validas, anomalias, duplicadas y montos por tipo")
     public List<ResumenDiarioWeb> resumenDiario(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
-        return core.resumenDiario(fecha).stream()
+        return Espera.join(nucleo.resumenDiario(fecha)).stream()
                 .map(ResumenDiarioWeb::desde)
                 .toList();
     }

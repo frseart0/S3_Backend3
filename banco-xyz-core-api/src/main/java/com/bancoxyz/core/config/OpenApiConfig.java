@@ -11,11 +11,11 @@ public class OpenApiConfig {
     @Bean
     public OpenAPI coreApiOpenAPI() {
         return new OpenAPI().info(new Info()
-                .title("Banco XYZ - core-api")
+                .title("Banco XYZ - reportes del batch")
                 .version("1.0.0")
                 .description("""
-                        API de dominio sobre los datos generados por los Jobs de Spring Batch.
-                        No la consumen clientes finales: solo los BFF web, movil y cajero, que
-                        deben enviar la cabecera X-Internal-Key."""));
+                        Consultas de los reportes generados por los Jobs de Spring Batch.
+                        Clientes, cuentas y pagos tienen su propio servicio. Los BFF deben
+                        enviar la cabecera X-Internal-Key."""));
     }
 }

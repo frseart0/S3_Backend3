@@ -59,6 +59,12 @@ batch:
     multiplier: 2.0
     max-interval-ms: 2000
 
+  # Reejecucion automatica del Job completo cuando una ejecucion termina en
+  # FAILED (fallo critico). El retry de arriba solo cubre errores transitorios
+  # dentro de un chunk. 0 desactiva la reejecucion.
+  restart:
+    max-intentos: 2
+
   # Escalamiento via Partitioning: cuantas particiones (gridSize) se generan
   # por archivo CSV y cuantos hilos del pool las procesan en paralelo.
   partition:

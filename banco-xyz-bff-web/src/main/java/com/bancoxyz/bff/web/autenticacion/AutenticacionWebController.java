@@ -1,6 +1,7 @@
 package com.bancoxyz.bff.web.autenticacion;
 
-import com.bancoxyz.bff.common.core.CoreApiClient;
+import com.bancoxyz.bff.common.resiliencia.Espera;
+import com.bancoxyz.bff.web.resiliencia.LlamadasNucleoWeb;
 import com.bancoxyz.bff.common.oauth.OAuthClienteProperties;
 import com.bancoxyz.bff.common.oauth.ResultadoToken;
 import com.bancoxyz.bff.common.oauth.SolicitanteToken;
@@ -33,16 +34,16 @@ import java.util.List;
 @Tag(name = "Autenticacion web")
 public class AutenticacionWebController {
 
-    private final CoreApiClient core;
+    private final LlamadasNucleoWeb nucleo;
     private final JwtService jwt;
     private final OAuthClienteProperties oauth;
     private final SolicitanteToken solicitante;
 
-    public AutenticacionWebController(CoreApiClient core,
+    public AutenticacionWebController(LlamadasNucleoWeb nucleo,
                                       JwtService jwt,
                                       OAuthClienteProperties oauth,
                                       SolicitanteToken solicitante) {
-        this.core = core;
+        this.nucleo = nucleo;
         this.jwt = jwt;
         this.oauth = oauth;
         this.solicitante = solicitante;
@@ -57,7 +58,7 @@ public class AutenticacionWebController {
             UsuarioCanal usuario = jwt.validar(token.accessToken(), TipoToken.ACCESO);
             return sesion(usuario, token.accessToken(), token.expiraEnSegundos(jwt.duracionAcceso()));
         }
-        var resultado = core.validarCredenciales(credenciales.usuario(), credenciales.password());
+        var resultado = Espera.join(nucleo.validarCredenciales(credenciales.usuario(), credenciales.password()));
         UsuarioCanal usuario = VerificacionIdentidad.exigirAutenticado(resultado, Canal.WEB);
 
         return sesion(usuario, jwt.emitirAcceso(usuario), jwt.duracionAcceso().toSeconds());

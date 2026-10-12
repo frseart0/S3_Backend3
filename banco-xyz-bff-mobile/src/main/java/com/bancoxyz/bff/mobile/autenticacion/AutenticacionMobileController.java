@@ -1,6 +1,7 @@
 package com.bancoxyz.bff.mobile.autenticacion;
 
-import com.bancoxyz.bff.common.core.CoreApiClient;
+import com.bancoxyz.bff.common.resiliencia.Espera;
+import com.bancoxyz.bff.mobile.resiliencia.LlamadasNucleoMobile;
 import com.bancoxyz.bff.common.oauth.OAuthClienteProperties;
 import com.bancoxyz.bff.common.oauth.ResultadoToken;
 import com.bancoxyz.bff.common.oauth.SolicitanteToken;
@@ -30,16 +31,16 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Autenticacion movil")
 public class AutenticacionMobileController {
 
-    private final CoreApiClient core;
+    private final LlamadasNucleoMobile nucleo;
     private final JwtService jwt;
     private final OAuthClienteProperties oauth;
     private final SolicitanteToken solicitante;
 
-    public AutenticacionMobileController(CoreApiClient core,
+    public AutenticacionMobileController(LlamadasNucleoMobile nucleo,
                                          JwtService jwt,
                                          OAuthClienteProperties oauth,
                                          SolicitanteToken solicitante) {
-        this.core = core;
+        this.nucleo = nucleo;
         this.jwt = jwt;
         this.oauth = oauth;
         this.solicitante = solicitante;
@@ -56,7 +57,7 @@ public class AutenticacionMobileController {
             return new SesionMobile(token.accessToken(), refresco,
                     token.expiraEnSegundos(jwt.duracionAcceso()), usuario.nombre());
         }
-        var resultado = core.validarCredenciales(credenciales.usuario(), credenciales.password());
+        var resultado = Espera.join(nucleo.validarCredenciales(credenciales.usuario(), credenciales.password()));
         UsuarioCanal usuario = VerificacionIdentidad.exigirAutenticado(resultado, Canal.MOBILE);
         return sesion(usuario, jwt.emitirRefresco(usuario));
     }

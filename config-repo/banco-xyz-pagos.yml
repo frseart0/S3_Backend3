@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/banco_xyz
+    username: banco_xyz
+    password: banco_xyz
+
+core:
+  seguridad:
+    clave-interna: ${CORE_INTERNAL_KEY:clave-interna-banco-xyz-2026}
+  retiro:
+    monto-minimo: 1000
+    monto-maximo-operacion: 200000
+    limite-diario: 400000
+  eventos:
+    habilitado: true
+    topico: banco.retiros.realizados
+    topico-transacciones: banco.transacciones.completadas
+    intervalo-ms: 2000

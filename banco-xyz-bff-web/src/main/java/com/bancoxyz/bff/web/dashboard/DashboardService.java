@@ -1,8 +1,9 @@
 package com.bancoxyz.bff.web.dashboard;
 
-import com.bancoxyz.bff.common.core.CoreApiClient;
 import com.bancoxyz.bff.common.core.CoreApiException;
+import com.bancoxyz.bff.common.resiliencia.Espera;
 import com.bancoxyz.bff.web.config.WebProperties;
+import com.bancoxyz.bff.web.resiliencia.LlamadasNucleoWeb;
 import com.bancoxyz.bff.web.dto.DashboardWeb;
 import com.bancoxyz.bff.web.dto.EstadoAnualWeb;
 import com.bancoxyz.bff.web.dto.InteresWeb;
@@ -18,9 +19,6 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutorService;
-import java.util.function.Supplier;
 
 /**
  * Compone el dashboard de la banca en linea. Las cinco consultas al core-api
@@ -37,34 +35,31 @@ public class DashboardService {
 
     private static final Logger log = LoggerFactory.getLogger(DashboardService.class);
 
-    private final CoreApiClient core;
-    private final ExecutorService ejecutor;
+    private final LlamadasNucleoWeb nucleo;
     private final WebProperties propiedades;
 
-    public DashboardService(CoreApiClient core, ExecutorService ejecutor, WebProperties propiedades) {
-        this.core = core;
-        this.ejecutor = ejecutor;
+    public DashboardService(LlamadasNucleoWeb nucleo, WebProperties propiedades) {
+        this.nucleo = nucleo;
         this.propiedades = propiedades;
     }
 
     public DashboardWeb componer(long cuentaId) {
         int tamano = propiedades.movimientosDashboard();
 
-        var perfil = tarea(() -> core.perfil(cuentaId));
-        var saldo = tarea(() -> core.saldo(cuentaId));
-        var movimientos = tarea(() -> core.movimientos(cuentaId, null, null, 0, tamano));
-        var intereses = tareaOpcional(() -> core.intereses(cuentaId), "intereses");
-        var estadosAnuales = tareaOpcional(() -> core.estadosAnuales(cuentaId), "estados anuales");
+        var perfil = nucleo.perfil(cuentaId);
+        var saldo = nucleo.saldo(cuentaId);
+        var movimientos = nucleo.movimientos(cuentaId, null, null, 0, tamano);
+        var intereses = nucleo.intereses(cuentaId);
+        var estadosAnuales = nucleo.estadosAnuales(cuentaId);
 
-        // Las cinco tareas ya estan corriendo; aqui solo se recogen resultados.
-        PaginaMovimientos pagina = esperar(movimientos);
+        PaginaMovimientos pagina = Espera.join(movimientos);
         List<MovimientoWeb> ultimos = pagina.contenido().stream().map(MovimientoWeb::desde).toList();
-        var detalleIntereses = esperar(intereses);
-        var estados = esperar(estadosAnuales);
+        var detalleIntereses = opcional(intereses, "intereses");
+        var estados = opcional(estadosAnuales, "estados anuales");
 
         return new DashboardWeb(
-                PerfilWeb.desde(esperar(perfil)),
-                SaldoWeb.desde(esperar(saldo)),
+                PerfilWeb.desde(Espera.join(perfil)),
+                SaldoWeb.desde(Espera.join(saldo)),
                 ultimos,
                 detalleIntereses == null ? null : InteresWeb.desde(detalleIntereses),
                 estados == null ? List.of() : estados.stream().map(EstadoAnualWeb::desde).toList(),
@@ -72,42 +67,19 @@ public class DashboardService {
                 Instant.now());
     }
 
-    private <T> CompletableFuture<T> tarea(Supplier<T> consulta) {
-        return CompletableFuture.supplyAsync(consulta, ejecutor);
-    }
-
     /**
-     * Recoge el resultado desenvolviendo la {@link CompletionException} con la
-     * que {@code join} envuelve los fallos: si no se desenvuelve, el manejador
-     * de errores no reconoceria un {@link CoreApiException} y todo terminaria
-     * como 500.
+     * Una seccion que el servicio de cuentas no tiene (404) se omite; cualquier
+     * otro error si se propaga.
      */
-    private <T> T esperar(CompletableFuture<T> futuro) {
+    private <T> T opcional(CompletableFuture<T> futuro, String seccion) {
         try {
-            return futuro.join();
-        } catch (CompletionException ex) {
-            if (ex.getCause() instanceof RuntimeException causa) {
-                throw causa;
+            return Espera.join(futuro);
+        } catch (CoreApiException ex) {
+            if (ex.estado().value() == 404) {
+                log.debug("El dashboard omite la seccion de {}: {}", seccion, ex.getMessage());
+                return null;
             }
             throw ex;
         }
-    }
-
-    /**
-     * Una seccion que el core no tiene (404) se omite; cualquier otro error si
-     * se propaga, porque significa que el nucleo esta en problemas.
-     */
-    private <T> CompletableFuture<T> tareaOpcional(Supplier<T> consulta, String seccion) {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return consulta.get();
-            } catch (CoreApiException ex) {
-                if (ex.estado().value() == 404) {
-                    log.debug("El dashboard omite la seccion de {}: {}", seccion, ex.getMessage());
-                    return null;
-                }
-                throw ex;
-            }
-        }, ejecutor);
     }
 }

@@ -1,7 +1,8 @@
 package com.bancoxyz.bff.web.movimientos;
 
-import com.bancoxyz.bff.common.core.CoreApiClient;
+import com.bancoxyz.bff.common.resiliencia.Espera;
 import com.bancoxyz.bff.common.seguridad.UsuarioCanal;
+import com.bancoxyz.bff.web.resiliencia.LlamadasNucleoWeb;
 import com.bancoxyz.bff.web.dto.MovimientoWeb;
 import com.bancoxyz.bff.web.dto.PaginaWeb;
 import com.bancoxyz.domain.contract.PaginaMovimientos;
@@ -26,10 +27,10 @@ import java.util.List;
 @Tag(name = "Movimientos web")
 public class MovimientosWebController {
 
-    private final CoreApiClient core;
+    private final LlamadasNucleoWeb nucleo;
 
-    public MovimientosWebController(CoreApiClient core) {
-        this.core = core;
+    public MovimientosWebController(LlamadasNucleoWeb nucleo) {
+        this.nucleo = nucleo;
     }
 
     @GetMapping("/movimientos")
@@ -41,7 +42,8 @@ public class MovimientosWebController {
             @RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "20") int tamano) {
 
-        PaginaMovimientos resultado = core.movimientos(usuario.cuentaId(), desde, hasta, pagina, tamano);
+        PaginaMovimientos resultado = Espera.join(
+                nucleo.movimientos(usuario.cuentaId(), desde, hasta, pagina, tamano));
         List<MovimientoWeb> contenido = resultado.contenido().stream().map(MovimientoWeb::desde).toList();
 
         return new PaginaWeb<>(

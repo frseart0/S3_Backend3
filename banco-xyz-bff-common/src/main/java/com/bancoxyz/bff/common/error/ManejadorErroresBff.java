@@ -73,7 +73,7 @@ public class ManejadorErroresBff {
     public ResponseEntity<ErrorRespuesta> canalNoDisponible(CanalNoDisponibleException ex) {
         log.warn("Canal degradado: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(ErrorRespuesta.de("CAJERO_NO_DISPONIBLE", ex.getMessage()));
+                .body(ErrorRespuesta.de(ex.codigo(), ex.getMessage()));
     }
 
     @ExceptionHandler(CoreApiException.class)
